@@ -1,15 +1,19 @@
 from __future__ import annotations
 import openai
+from openai import OpenAI
 import instructor
 from typing import List, Union, Optional
 from time import perf_counter
 import asyncio
+import anthropic
+from anthropic import Anthropic
 
-from lib.utils import load_env
+from lib.utils import load_env, MODELS
 from lib.models import Queries, Query
 
-vars = load_env(['OPENAI_API_KEY']) # load all vars, ensuring that a env exists and the expected vars are present
+vars = load_env(['OPENAI_API_KEY', 'ANTHROPIC_API_KEY']) # load all vars, ensuring that a env exists and the expected vars are present
 OPENAI_API_KEY = vars['OPENAI_API_KEY']
+ANTHROPIC_API_KEY = vars['ANTHROPIC_API_KEY']
 
 class GeneratorSync:
     def __init__(self, output_schema, system_prompt: str = "You are a helpful assistant.", model: str = "gpt-3.5-turbo", debug: bool = False):
@@ -43,16 +47,28 @@ class GeneratorSync:
 class GeneratorAsync:
     _sem = None # class var
 
-    def __init__(self, output_schema, system_prompt: str = "You are a helpful assistant.", api_key: str = None, base_url: str = None, model: str = "gpt-3.5-turbo", rps: int = 10, debug: bool = False):
-        self.client = instructor.patch(openai.AsyncOpenAI(api_key=api_key or OPENAI_API_KEY, base_url=base_url))
+    def __init__(self, output_schema, system_prompt: str = "You are a helpful assistant.", api_key: str = None, model: str = "gpt-3.5-turbo", rps: int = 10, debug: bool = False):
         self.output_schema = output_schema
         self.model = model
         self.system_prompt = system_prompt
         self.debug = debug
         self.to_complete = []
-        
-        # handle_ipykernel() # auto nested event loop support from notebook
+        self._init_client(model) # init the right client for the model
+
         if GeneratorAsync._sem is None: GeneratorAsync._sem = asyncio.Semaphore(rps) # init only once (class var)
+
+    def _init_client(self, model: str):
+        if model in MODELS:
+            if model['org'] == 'openai':
+                if self.debug: print("Initializing OpenAI Client...")
+                self.client = instructor.from_openai(OpenAI(api_key=OPENAI_API_KEY))
+            elif model['org'] == 'anthropic':
+                self.client = instructor.from_anthropic(Anthropic(api_key=ANTHROPIC_API_KEY))
+                if self.debug: print("Initializing Anthropic Client...")
+            else:
+                raise ValueError(f"Org {model['org']} not supported. Orgs = {set(model['org'] for model in MODELS.values())}")
+        else:
+            raise ValueError(f"Model {model} not in models list: {MODELS}")
     
     async def _single_generate(self, query: str, task_id: int = 0, model: str = None):
         start = perf_counter()
@@ -99,7 +115,7 @@ class QueryGeneratorAsync(GeneratorAsync):
         def _make_prompt(user_insturctions: str):
             intructions = f"""
             INSTRUCITONS:
-            Generate 2-3 verbose search queries based on the following user instructions. You must generate a minimum of 2 queries and a maximum of 3 queries. Each query should be unique and relevant to the user's request.        
+            Generate 2-3 verbose search queries based on the following user instructions. You must generate a minimum of 2 queries and a maximum of 3 queries. Each query should be unique and relevant to the user's request. If you need to answer any sub questions to comply with the user's instructions, include them in the queries.
             """
             example = """
             EXAMPLE 1
