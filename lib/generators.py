@@ -6,7 +6,7 @@ from time import perf_counter
 import asyncio
 
 from lib.utils import load_env
-from lib.models import Problems, Solutions, Queries, Query
+from lib.models import Queries, Query
 
 vars = load_env(['OPENAI_API_KEY']) # load all vars, ensuring that a env exists and the expected vars are present
 OPENAI_API_KEY = vars['OPENAI_API_KEY']
@@ -99,14 +99,22 @@ class QueryGeneratorAsync(GeneratorAsync):
         def _make_prompt(user_insturctions: str):
             intructions = f"""
             INSTRUCITONS:
-            Generate 2-3 search queries based on the following user instructions:        
+            Generate 2-3 verbose search queries based on the following user instructions. You must generate a minimum of 2 queries and a maximum of 3 queries. Each query should be unique and relevant to the user's request.        
             """
             example = """
-            EXAMPLE USER INSTRUCTIONS: I need to find information on the impact of deforestation on climate change.
+            EXAMPLE 1
+            INSTRUCTIONS: What is the impact of deforestation on climate change?
             EXAMPLE RESPONSE:
-            1. Query: "Impact of deforestation on climate change"
-            2. Query: "Solutions to deforestation"
-            3. Query: "Deforestation statistics by region"
+            1. Query: "relationshipe between deforestation and climate change"
+            2. Query: "how are deforestation and climate change related"
+            3. Query: "deforestation research global warming effects"
+
+            EXAMPLE 2
+            INSTRUCTION: Who is Jim Simons?
+            EXAMPLE RESPONSE:
+            1. Query: "Jim Simons biography"
+            2. Query: "Jim Simons professional background"
+            3. Query: "Jim Simons social media"
             """
             query = f"{intructions}\n{example}\nUSER INSTRUCTIONS:\n{user_insturctions}\nOUTPUT:"
             return query
@@ -118,117 +126,4 @@ class QueryGeneratorAsync(GeneratorAsync):
             else: raise ValueError(f"Expected str or list, got {type(user_query_or_queries)}")
         
         queries = _handle_input(user_query_or_queries)
-        return await super().generate(queries, model)
-    
-class ProblemGeneratorSync(GeneratorSync):
-    def __init__(self, model: str = None, debug: bool = False):
-        super().__init__(Problems, system_prompt="You are designed to assist venture capitlaists in market research. Be concise and to the point, but include all relevant information.", model=model, debug=debug)
-
-    def generate(self, subfield_or_tech: str, model: str = None, n: int = 7):
-        instructions = f"""
-        INSRUCTIONS:
-            1. list {n} problems that {subfield_or_tech} aims to solve
-            2. for each problem, include:
-                1. details abolut the problem
-                2. a list of subproblems
-                3. a brief market description for an investor looking to invest in a company that solves this problem
-                4. a brief customer profile/description for a customer that would by a solution to this problem
-        """
-        example = """
-        EXAMPLE RESPONSE:
-        1. Problem: Deforestation
-            - Details: Deforestation contributes to climate change and loss of biodiversity. Caused by activities such as logging, agriculture, and urbanization.
-            - Subproblems:
-                - Its difficult to monitor tree health
-                - Monitoring pests and diseases
-                - Managing forest fires
-                - Monitoring illegal logging
-            - Market Description: The precision forestry market offers advanced technological solutions to combat deforestation effects, such as climate change and biodiversity loss, driven by unsustainable logging, agriculture, and urbanization. It encompasses innovative applications like satellite imagery, drones, AI, and IoT for tree health monitoring, pest and disease control, forest fire management, and illegal logging detection. This rapidly growing sector appeals to investors due to its significant growth potential, alignment with global sustainability goals, and capacity to address critical environmental challenges with cutting-edge solutions.
-            - Customer Profile: Forest Management Organizations and Conservation Agencies: These entities manage vast forest areas and seek efficient, scalable tech solutions for sustainable forest management, including health monitoring, pest and disease management, and illegal logging prevention. They face challenges like resource limitations and the need for accurate, timely data. These organizations prioritize investments in technology that enhances operational efficiency, supports sustainability, and provides environmental conservation value.
-        ...
-        """
-        query = f"{instructions}\n{example}"
-        return super().generate(query, model)
-
-
-class ProblemGeneratorAsync(GeneratorAsync):
-    def __init__(self, model: str = None, debug: bool = False):
-        super().__init__(Problems, system_prompt="You are designed to assist venture capitlaists in market research. Be concise and to the point, but include all relevant information.", model=model, debug=debug)
-    
-    async def generate(self, queries: List[str], model: str = None, n: int = 7):
-        def _make_prompt(query: str):
-            instructions = f"""
-            INSRUCTIONS:
-                1. list {n} problems that {query} aims to solve
-                2. for each problem, include:
-                    1. details abolut the problem
-                    2. a list of subproblems
-                    3. a brief market description for an investor looking to invest in a company that solves this problem
-                    4. a brief customer profile/description for a customer that would by a solution to this problem
-            """
-            example = """
-            EXAMPLE RESPONSE:
-            1. Problem: Deforestation
-                - Details: Deforestation contributes to climate change and loss of biodiversity. Caused by activities such as logging, agriculture, and urbanization.
-                - Subproblems:
-                    - Its difficult to monitor tree health
-                    - Monitoring pests and diseases
-                    - Managing forest fires
-                    - Monitoring illegal logging
-                - Market Description: The precision forestry market offers advanced technological solutions to combat deforestation effects, such as climate change and biodiversity loss, driven by unsustainable logging, agriculture, and urbanization. It encompasses innovative applications like satellite imagery, drones, AI, and IoT for tree health monitoring, pest and disease control, forest fire management, and illegal logging detection. This rapidly growing sector appeals to investors due to its significant growth potential, alignment with global sustainability goals, and capacity to address critical environmental challenges with cutting-edge solutions.
-                - Customer Profile: Forest Management Organizations and Conservation Agencies: These entities manage vast forest areas and seek efficient, scalable tech solutions for sustainable forest management, including health monitoring, pest and disease management, and illegal logging prevention. They face challenges like resource limitations and the need for accurate, timely data. These organizations prioritize investments in technology that enhances operational efficiency, supports sustainability, and provides environmental conservation value.
-            ...
-            """
-            return f"{instructions}\n{example} Make sure to output {n} problems. OUTPUT\n"
-        
-        queries = [_make_prompt(query) for query in queries]
-        return await super().generate(queries, model)
-
-
-class SolutionGeneratorAsync(GeneratorAsync):
-    def __init__(self, model: str = None, debug: bool = False):
-        super().__init__(Solutions, system_prompt="You are designed to assist venture capitlaists in market research. Be concise and to the point, but include all relevant information.", model=model, debug=debug)
-
-    async def generate(self, problems: List[str], model: str = None):
-        def _make_prompt(problem: str):
-            instructions = """
-            INSRUCTIONS:
-                For each sub problem, provide:
-                    - the problem
-                    - a list of solution names and their details
-
-            SCHEMA:
-                {
-                    "solutions": [
-                        {
-                        "problem": "Example Problem",
-                        "solutions_dict": [
-                            {"Solution Name": "Solution Detail"}
-                        ]
-                        }...
-                    ]
-                }
-            """
-            input_data = f"INPUT DATA:\n{problem}"
-            example = """
-            EXAMPLE RESPONSE:
-
-            {
-                "solutions": [
-                    {
-                        "problem": "Pests and diseases contribute to deforestion"
-                        "solutions_dict": [
-                            {"Biological Control": "Using natural predators to control pests..."},
-                            {"Genetic Resistance": "Developing trees that are resistant to pests..."},
-                            {"Chemical Control": "Using pesticides to control pests..."},
-                            {"Cultural Control": "Using traditional farming methods to control pests..."}
-                            ...
-                        ]
-                    }...
-                ]
-            }
-            """
-            query = f"{instructions}\n{input_data}\n{example}\nOUTPUT:"
-            return query
-        queries = [_make_prompt(problem) for problem in problems]
         return await super().generate(queries, model)
