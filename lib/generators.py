@@ -1,12 +1,12 @@
 from __future__ import annotations
 import openai
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 import instructor
 from typing import List, Union, Optional
 from time import perf_counter
 import asyncio
 import anthropic
-from anthropic import Anthropic
+from anthropic import Anthropic, AsyncAnthropic
 
 from lib.utils import load_env, MODELS
 from lib.models import Queries, Query
@@ -47,28 +47,41 @@ class GeneratorSync:
 class GeneratorAsync:
     _sem = None # class var
 
-    def __init__(self, output_schema, system_prompt: str = "You are a helpful assistant.", api_key: str = None, model: str = "gpt-3.5-turbo", rps: int = 10, debug: bool = False):
+    def __init__(self, output_schema, system_prompt: str = "You are a helpful assistant.", model: str = "gpt-3.5-turbo", max_tokens: int = 4096, rps: int = 10, debug: bool = False):
         self.output_schema = output_schema
         self.model = model
         self.system_prompt = system_prompt
         self.debug = debug
         self.to_complete = []
-        self._init_client(model) # init the right client for the model
+        self._init_client(model, max_tokens) # init the right client for the model and max tokens var
 
         if GeneratorAsync._sem is None: GeneratorAsync._sem = asyncio.Semaphore(rps) # init only once (class var)
 
-    def _init_client(self, model: str):
+    def _init_client(self, model: str, max_tokens: int):
+        if type(model) != str: raise ValueError(f"Model must be a string, not {type(model)}")
+        if model is None: raise ValueError("Model cannot be None")
         if model in MODELS:
-            if model['org'] == 'openai':
+            if MODELS[model].get('org', None) == 'openai':
                 if self.debug: print("Initializing OpenAI Client...")
-                self.client = instructor.from_openai(OpenAI(api_key=OPENAI_API_KEY))
-            elif model['org'] == 'anthropic':
-                self.client = instructor.from_anthropic(Anthropic(api_key=ANTHROPIC_API_KEY))
+                self.client = instructor.from_openai(AsyncOpenAI(api_key=OPENAI_API_KEY))
+            elif MODELS[model].get('org', None) == 'anthropic':
+                self.client = instructor.from_anthropic(AsyncAnthropic(api_key=ANTHROPIC_API_KEY))
                 if self.debug: print("Initializing Anthropic Client...")
             else:
                 raise ValueError(f"Org {model['org']} not supported. Orgs = {set(model['org'] for model in MODELS.values())}")
+            
+            self.max_tokens = max_tokens
+            self.input_tokens = MODELS[model].get('context_window', 8192) - self.max_tokens - 1
+            self.model_var = MODELS[model]["model_var"] # init model var (the actual model name to use in the API call)
+
+            if self.debug:
+                print(f"Model: {model}")
+                print(f"Model Var: {self.model_var}")
+                print(f"Max Tokens: {self.max_tokens}")
+                print(f"Input Tokens: {self.input_tokens}")
         else:
             raise ValueError(f"Model {model} not in models list: {MODELS}")
+        
     
     async def _single_generate(self, query: str, task_id: int = 0, model: str = None):
         start = perf_counter()
@@ -77,9 +90,10 @@ class GeneratorAsync:
         try:
             async with GeneratorAsync._sem:
                 res = await self.client.chat.completions.create(
-                    model=model or self.model,
+                    model=model or self.model_var,
                     response_model=self.output_schema,
                     messages = messages,
+                    max_tokens=self.max_tokens,
                 )
             if self.debug: print(f"Task id: {task_id} in: {perf_counter() - start:.2f}s")
             self.to_complete[task_id] = True # hash map
