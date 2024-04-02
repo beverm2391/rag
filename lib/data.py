@@ -7,9 +7,11 @@ import cohere
 from typing import List
 import asyncio
 import pandas as pd
+from time import perf_counter
 
 from lib.utils import load_env
 from lib.generators import QueryGeneratorAsync
+from lib.models import Queries
 
 env = load_env(['OPENAI_API_KEY', 'COHERE_API_KEY'])
 OPENAI_API_KEY = env['OPENAI_API_KEY']
@@ -99,16 +101,18 @@ class Index:
         if self.data is None: raise Exception("No data loaded. Call `process_text()` or `load_data()` first")
 
         # Now we need to generate better queries (users are dumb a lot of the time)
-        query_generator = QueryGeneratorAsync()
-        res = asyncio.run(query_generator.generate(query)) # this will return a list of results
-        parsed = res[0].get_query_text_only() # returns a list but we only need the first element
+        query_generator = QueryGeneratorAsync(model='claude-3-haiku')
+        start = perf_counter()
+        res: List[Queries] = asyncio.run(query_generator.generate(query)) # this will return a list of results
+        query_texts = res[0].get_query_text_only() # returns a list but we only need the first element
         if self.debug:
-            print(f"Generated queries: {parsed}")
+            print(f"Generated queries in {perf_counter() - start:0.2f} seconds")
+            for query in query_texts: print(f" - {query}")
 
         # Now we need to get the strings and relatednesses for each query, then remove duplicates to prepare for reranking
         all_strings = []
-        for query_obj in parsed:
-            strings, relatednesses = self.strings_ranked_by_relatedness(query_obj.text, top_n=top_n)
+        for query in query_texts:
+            strings, _ = self.strings_ranked_by_relatedness(query, top_n=top_n)
             all_strings.extend([string for string in strings if string not in all_strings]) # extend with non-duplicate strings
 
         return Reranker.rerank(query=query, documents=all_strings, top_n=top_n) # this will return strings and scores just like the strings_ranked_by_relatedness method

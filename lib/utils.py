@@ -4,6 +4,7 @@ import asyncio
 from PyPDF2 import PdfReader
 import re
 from pptx import Presentation
+import tiktoken
 
 def load_env(expected_vars: list = []):
     env = load_dotenv()
@@ -13,12 +14,9 @@ def load_env(expected_vars: list = []):
         assert os.getenv(var), f"Expected {var} in .env"
     return os.environ
 
-def handle_ipykernel():
-    if asyncio.get_event_loop().is_running()\
-    and "ipykernel" in asyncio.get_event_loop().__module__\
-    and "nest_asyncio" not in asyncio.get_event_loop().__module__:
-        import nest_asyncio
-        nest_asyncio.apply()
+def count_tokens(text: str, model: str = "gpt-4") -> int:
+    encoding = tiktoken.encoding_for_model(model)
+    return len(encoding.encode(text)) if text else 0
 
 def pdf_to_text(fpath: str): return''.join([page.extract_text() for page in PdfReader(fpath).pages]).replace('\n', ' ').strip()
 
