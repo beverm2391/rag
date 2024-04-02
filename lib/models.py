@@ -18,3 +18,7 @@ class Queries(BaseModel):
         for key in self.__dict__.keys(): 
             if key != "_raw_response" and self.__dict__[key]: data.append(self.__dict__[key].parse())
         return data
+    
+    def get_query_text_only(self):
+        """Get the text of the queries"""
+        return [query.text for query in self.parse()]
