@@ -135,9 +135,8 @@ class AnthropicChat(ChatABC):
         self.model_var = model_var
         self.context_window = context_window
 
-        self.messages = [
-            {"role": "system", "content": system_prompt},
-        ]
+        self.messages = [] # claude doesn't use a system message like OAI
+        # ? DOCS: https://docs.anthropic.com/claude/docs/system-prompts
 
         self.debug = debug
         
@@ -151,8 +150,9 @@ class AnthropicChat(ChatABC):
             messages=self.messages + [{"role": "user", "content": text}],
             temperature=self.temperature,
             max_tokens=self.max_tokens,
+            system=self.system_prompt,
         )
-        self.messages.append((new_message:={"role": res['role'], "content": res['content']}))
+        self.messages.append((new_message:={"role": res.role, "content": res.content}))
         return {
             "type": "object",
             "data": {
@@ -229,12 +229,15 @@ class CohereChat(ChatABC):
         res = self.client.chat(
             model=self.model_var,
             chat_history=self.messages,
-            message={"role": "USER", "message": text},
+            message=text, # ? DOCS: https://docs.cohere.com/reference/chat
             temperature=self.temperature,
             max_tokens=self.max_tokens,
             connectors=[{"id": "web-search"}] if self.web_search else None,
         )
+
+        self.messages.append((new_message:={"role": "USER", "message": text}))
         self.messages.append((new_message:={"role": "CHATBOT", "message": res['text']}))
+
         return {
             "type": "object",
             "data": {

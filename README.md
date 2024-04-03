@@ -23,16 +23,21 @@ This is a work in progress. Right now I'm finishing up the core abstractions. Ev
 
 
 ## Changelog
+
+### Week of 3/27
 - [X] Update the generator code to use Anthropic
 - [X] add reranking to the index class
 - [X] Implement the multiple query inside the index by searching all queries, then removing duplicates, before finally reranking
 
-Week of 4/3 
+### Week of 4/27
 - [X] finish the Cohere class in `chat.py`
 - [X] finish the Chat factory class
+- [x] add tests for Chat factory class
 
 ## TODO
-- [ ] sanity check all the new abstractions
+- [ ] sanity check all the new abstractions (see `notebooks/tests/sanity-check-chat.ipynb`)
+- [ ] add ask_stream function to the abstract chat class
+- [ ] figure out auto nest_asyncio
 - [ ] figure out how you want to test this repo - pytest probably
 - [ ] build and text the ability to generate queries that include the best location/db to search for
 - [ ] Add tool calls for openai and Anthropic
