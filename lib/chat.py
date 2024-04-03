@@ -190,23 +190,24 @@ class AnthropicChat(ChatABC):
             
             new_message = {"role": "assistant", "content": ""}
             
-            for event in res_stream.text_stream:
-                if event.get('type') == "mesage_start":
+            for event in res_stream:
+                if self.debug: print("event: ", event)
+                if event.type == "mesage_start":
                     pass
-                elif event.get('type') == "content_block_start":
-                    text = event['content_block']['text']
+                elif event.type == "content_block_start":
+                    text = event.content_block.text
                     new_message["content"] += text
                     yield {"type": "text", "data": text} # content_block : {"type": "text", "text": "" }
-                elif event.get('type') == "content_block_delta":
-                    text = event['delta']['text']
+                elif event.type == "content_block_delta":
+                    text = event.delta.text
                     new_message["content"] += text
                     yield {"type": "text", "data": text}
-                elif event.get('type') == "content_block_stop":
+                elif event.type == "content_block_stop":
                     pass
-                elif event.get('type') == "message_delta":
+                elif event.type == "message_delta":
                     # data: {"type": "message_delta", "delta": {"stop_reason": "end_turn", "stop_sequence":null, "usage":{"output_tokens": 15}}}
                     pass
-                elif event.get('type') == "message_stop":
+                elif event.type == "message_stop":
                     yield {
                         "type": "object",
                         "data": {
@@ -270,20 +271,19 @@ class CohereChat(ChatABC):
 
     # ? DOCS: https://docs.cohere.com/docs/streaming#retrieval-augmented-generation-stream-events
     def chat_stream(self, text: str) -> Generator[str, None, None]:
-        res_stream = self.client.chat(
+        res_stream = self.client.chat_stream(
             model=self.model_var,
             chat_history=self.messages,
             message={"role": "USER", "message": text},
             temperature=self.temperature,
             max_tokens=self.max_tokens,
             connectors=[{"id": "web-search"}] if self.web_search else None,
-            stream=True,
         )
 
         new_message = {"role": "CHATBOT", "message": ""}
 
-        # handle each event
         for event in res_stream:
+            if self.debug: print("event: ", event)
             if event['event_type'] == "stream_start":
                 pass
             elif event['event_type'] == "text-generation":
