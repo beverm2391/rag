@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Generator
+from typing import Generator, Dict, List
 from openai import OpenAI
 from anthropic import Anthropic
 import cohere
@@ -49,7 +49,8 @@ class ChatABC(ABC):
         """Chat with the model and yield the response."""
         pass
 
-    def __repr__(self): return f"{self.__class__.__name__}(model={self.model})"
+    def __repr__(self):
+        return f"{self.__class__.__name__}(model={self.model_name}, temperature={self.temperature}, max_tokens={self.max_tokens}, system_prompt={self.system_prompt if len(self.system_prompt) < 20 else self.system_prompt[:20] + '...'}, debug={self.debug})"
 
 class OpenAIChat(ChatABC):
     """Chat with OpenAI"""
@@ -82,10 +83,17 @@ class OpenAIChat(ChatABC):
             temperature=self.temperature,
             max_tokens=self.max_tokens,
         )
-        self.messages.append(res.choices[0].message)
-        return self.messages[-1]['content']
+        self.messages.append((new_message:=res.choices[0].message))
+        # TODO - Add support for tool caling, other stuff sent back
+        return {
+            "type" : "object",
+            "data": {
+                "message": new_message,
+            },
+        }
 
-    def chat_stream(self, text: str) -> Generator[str, None, None]:
+    # ? DOCS: https://platform.openai.com/docs/api-reference/chat/streaming
+    def chat_stream(self, text: str) -> Generator[Dict[str, any], None, None]:
         res_stream = self.client.chat.completions.create(
             model=self.model_var,
             messages=self.messages + [{"role": "user", "content": text}],
@@ -95,10 +103,22 @@ class OpenAIChat(ChatABC):
         )
 
         new_message = {"role": "assistant", "content": ""}
-        for res in res_stream:
-            if res.choices[0].delta.get("content"):
-                new_message["content"] += res.choices[0].delta["content"]
-                yield new_message["content"]
+
+        for chunk in res_stream:
+            if chunk.choices[0].delta.get("content"):
+                content = chunk.choices[0].delta["content"]
+                new_message["content"] += content
+                yield {"type": "text", "data": content}
+
+            # TODO - Add support for tool caling, other stuff sent back 
+            if chunk.choices[0].finish_reason:
+                self.messages.append(new_message)
+                yield {
+                    "type": "object",
+                    "data": {
+                        "message": new_message,
+                    },
+                }
 
         self.messages.append(new_message)
 
@@ -133,9 +153,15 @@ class AnthropicChat(ChatABC):
             temperature=self.temperature,
             max_tokens=self.max_tokens,
         )
-        self.messages.append({"role": res['role'], "content": res['content']})
-        return self.messages[-1]['content']
+        self.messages.append((new_message:={"role": res['role'], "content": res['content']}))
+        return {
+            "type": "object",
+            "data": {
+                "message": new_message,
+            }
+        }
 
+    # ? DOCS: https://docs.anthropic.com/claude/reference/messages-streaming
     def chat_stream(self, text: str) -> Generator[str, None, None]:
         with self.client.messages.stream (
             model=self.model_var,
@@ -145,9 +171,31 @@ class AnthropicChat(ChatABC):
         ) as res_stream:
             
             new_message = {"role": "assistant", "content": ""}
-            for text in res_stream.text_stream:
-                new_message["content"] += text
-                yield text
+            
+            for event in res_stream.text_stream:
+                if event.get('type') == "mesage_start":
+                    pass
+                elif event.get('type') == "content_block_start":
+                    text = event['content_block']['text']
+                    new_message["content"] += text
+                    yield {"type": "text", "data": text} # content_block : {"type": "text", "text": "" }
+                elif event.get('type') == "content_block_delta":
+                    text = event['delta']['text']
+                    new_message["content"] += text
+                    yield {"type": "text", "data": text}
+                elif event.get('type') == "content_block_stop":
+                    pass
+                elif event.get('type') == "message_delta":
+                    # data: {"type": "message_delta", "delta": {"stop_reason": "end_turn", "stop_sequence":null, "usage":{"output_tokens": 15}}}
+                    pass
+                elif event.get('type') == "message_stop":
+                    yield {
+                        "type": "object",
+                        "data": {
+                            "message": new_message,
+                        },
+                    }
+
             self.messages.append(new_message)
 
 class CohereChat(ChatABC):
@@ -187,15 +235,19 @@ class CohereChat(ChatABC):
             max_tokens=self.max_tokens,
             connectors=[{"id": "web-search"}] if self.web_search else None,
         )
-        self.messages.append({"role": "CHATBOT", "message": res['text']})
+        self.messages.append((new_message:={"role": "CHATBOT", "message": res['text']}))
         return {
-            "text" : self.messages[-1]['message'],
-            "search_queries" : res.get("search_queries", None),
-            "search_results" : res.get("search_results", None),
-            "tool_calls" : res.get("tool_calls", None),
-            "citations" : res.get("citations", None),
+            "type": "object",
+            "data": {
+                "message": new_message,
+                "citations": res.get("citations", []),
+                "search_results": res.get("search_results", []),
+                "documents": res.get("documents", []),
+                "search_queries": res.get("search_queries", []),
+            },
         }
 
+    # ? DOCS: https://docs.cohere.com/docs/streaming#retrieval-augmented-generation-stream-events
     def chat_stream(self, text: str) -> Generator[str, None, None]:
         res_stream = self.client.chat(
             model=self.model_var,
@@ -206,18 +258,36 @@ class CohereChat(ChatABC):
             connectors=[{"id": "web-search"}] if self.web_search else None,
             stream=True,
         )
+
         new_message = {"role": "CHATBOT", "message": ""}
+        citations = []
+        search_results = []
+        documents = []
+        search_queries = []
+
         for event in res_stream:
             if event.event_type == StreamEvent.TEXT_GENERATION:
                 new_message["message"] += event.text
-                yield event.text
+                yield {"type": "text", "data": event.text}
+            elif event.event_type == StreamEvent.CITATION_GENERATION:
+                citations.extend(event.citations)
+            elif event.event_type == StreamEvent.SEARCH_RESULTS:
+                search_results.extend(event.search_results)
+                documents.extend(event.documents)
+            elif event.event_type == StreamEvent.SEARCH_QUERIES_GENERATION:
+                search_queries.extend(event.search_queries)
             elif event.event_type == StreamEvent.STREAM_END:
-                # this is where you parse the citations, search results, etc.
-                # TODO: https://docs.cohere.com/docs/streaming#using-streaming
-                pass
-
-        self.messages.append(new_message)
-
+                self.messages.append(new_message)
+                yield {
+                    "type": "object",
+                    "data": {
+                        "message": new_message,
+                        "citations": citations,
+                        "search_results": search_results,
+                        "documents": documents,
+                        "search_queries": search_queries,
+                    },
+                }
 
 class InstructorOpenAIChat(ChatABC):
     pass
@@ -230,10 +300,35 @@ class InstructorAnthropicChat(ChatABC):
 class Chat:
     _models = MODELS
 
-    # TODO: make sure to pass in the correct parameters for each model from the MODELS object
-    def __new__(cls, model: str):
-        if model not in cls._models: raise ValueError(f"Model {model} not in {cls._models}")
-        if model == "openai": return OpenAIChat(model)
-        elif model == "anthropic": return AnthropicChat(model)
-        elif model == "cohere": return CohereChat(model)
-        else: raise ValueError(f"Model {model} not supported")
+    def __new__(cls,
+            model_name: str, temperature: float, max_tokens: int, system_prompt: str,
+            debug: bool = False, **kwargs
+            ):
+
+        assert model_name in cls._models, f"Model {model_name} not found in model config"
+
+        _model = cls._models[model_name]
+        model_var = _model.get('model_var', None)
+        org = _model.get('org', None)
+        context_window = _model.get('context_window', None)
+
+        assert org is not None, f"Organization missing for {model_name} in model config"
+        assert model_var is not None, f"Model Var missing for {model_name} in model config"
+        assert context_window is not None, f"Context Window missing for {model_name} in model config"
+
+        if debug:
+            print(f"Model_name: {model_name}")
+            print(f"Model Var: {model_var}")
+            print(f"Org: {org}")
+            print(f"Context Window: {context_window}")
+
+        if org == "openai":
+            if debug: print(f"Creating {model_name} chat instance.")
+            return OpenAIChat(model_name, temperature, max_tokens, system_prompt, model_var=model_var, context_window=context_window, debug=debug, **kwargs)
+        elif org == "anthropic":
+            if debug: print(f"Creating {model_name} chat instance.")
+            return AnthropicChat(model_name, temperature, max_tokens, system_prompt, model_var=model_var, context_window=context_window, debug=debug, **kwargs)
+        elif org == "cohere":
+            if debug: print(f"Creating {model_name} chat instance.")
+            return CohereChat(model_name, temperature, max_tokens, system_prompt, model_var=model_var, context_window=context_window, debug=debug, **kwargs)
+        else: raise ValueError(f"Model {model_name} not supported")
