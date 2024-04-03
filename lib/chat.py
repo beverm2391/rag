@@ -3,7 +3,6 @@ from typing import Generator, Dict, List
 from openai import OpenAI
 from anthropic import Anthropic
 import cohere
-from cohere.responses.chat import StreamEvent
 import instructor
 
 from lib.utils import MODELS, load_env
@@ -63,7 +62,7 @@ class OpenAIChat(ChatABC):
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.system_prompt = system_prompt
-        self.model_var = model_var | model_name
+        self.model_var = model_var
         self.context_window = context_window
 
         self.messages = [
@@ -133,7 +132,7 @@ class AnthropicChat(ChatABC):
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.system_prompt = system_prompt
-        self.model_var = model_var | model_name
+        self.model_var = model_var
         self.context_window = context_window
 
         self.messages = [
@@ -211,7 +210,7 @@ class CohereChat(ChatABC):
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.system_prompt = system_prompt
-        self.model_var = model_var | model_name
+        self.model_var = model_var
         self.context_window = context_window
         self.web_search = web_search
         self.citations = citations
@@ -260,32 +259,32 @@ class CohereChat(ChatABC):
         )
 
         new_message = {"role": "CHATBOT", "message": ""}
-        citations = []
-        search_results = []
-        documents = []
-        search_queries = []
 
+        # handle each event
         for event in res_stream:
-            if event.event_type == StreamEvent.TEXT_GENERATION:
-                new_message["message"] += event.text
+            if event['event_type'] == "stream_start":
+                pass
+            elif event['event_type'] == "text-generation":
+                new_message["message"] += event['text']
                 yield {"type": "text", "data": event.text}
-            elif event.event_type == StreamEvent.CITATION_GENERATION:
-                citations.extend(event.citations)
-            elif event.event_type == StreamEvent.SEARCH_RESULTS:
-                search_results.extend(event.search_results)
-                documents.extend(event.documents)
-            elif event.event_type == StreamEvent.SEARCH_QUERIES_GENERATION:
-                search_queries.extend(event.search_queries)
-            elif event.event_type == StreamEvent.STREAM_END:
+            elif event['event_type'] == "search-results":                
+                # search_results.extend(event['search_results'])
+                # documents.extend(event['documents'])
+                pass
+            elif event['event_type'] == "citation-generation":
+                # citations.extend(event['citations'])
+                pass
+            elif event['event_type'] == "stream_end":
                 self.messages.append(new_message)
                 yield {
                     "type": "object",
                     "data": {
-                        "message": new_message,
-                        "citations": citations,
-                        "search_results": search_results,
-                        "documents": documents,
-                        "search_queries": search_queries,
+                        "message": new_message, # could also be {"role": "CHATBOT", "message": event['response']['text']}
+                        "token_count": event['response']['token_count'],
+                        "citations": event['response'].get("citations", []),
+                        "search_results": event['response'].get("search_results", []),
+                        "documents": event['response'].get("documents", []),
+                        "search_queries": event['response'].get("search_queries", []),
                     },
                 }
 

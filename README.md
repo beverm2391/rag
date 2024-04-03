@@ -22,16 +22,16 @@ This is a work in progress. Right now I'm finishing up the core abstractions. Ev
   - pretty self explanatory, just utils and configuration
 
 
-
-
-## Completed
+## Changelog
 - [X] Update the generator code to use Anthropic
 - [X] add reranking to the index class
 - [X] Implement the multiple query inside the index by searching all queries, then removing duplicates, before finally reranking
 
+Week of 4/3 
+- [X] finish the Cohere class in `chat.py`
+- [X] finish the Chat factory class
+
 ## TODO
-- [ ] finish the Cohere class in `chat.py`
-- [ ] finish the Chat factory class
 - [ ] sanity check all the new abstractions
 - [ ] figure out how you want to test this repo - pytest probably
 - [ ] build and text the ability to generate queries that include the best location/db to search for
