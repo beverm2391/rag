@@ -82,12 +82,13 @@ class OpenAIChat(ChatABC):
             temperature=self.temperature,
             max_tokens=self.max_tokens,
         )
-        self.messages.append((new_message:=res.choices[0].message))
+        response_text = res.choices[0].message.content
+        self.messages.append({"role": "assistant", "content": response_text})
         # TODO - Add support for tool caling, other stuff sent back
         return {
             "type" : "object",
             "data": {
-                "message": new_message,
+                "text": response_text,
             },
         }
 
@@ -115,7 +116,7 @@ class OpenAIChat(ChatABC):
                 yield {
                     "type": "object",
                     "data": {
-                        "message": new_message,
+                        "text": new_message["content"],
                     },
                 }
 
@@ -152,11 +153,14 @@ class AnthropicChat(ChatABC):
             max_tokens=self.max_tokens,
             system=self.system_prompt,
         )
-        self.messages.append((new_message:={"role": res.role, "content": res.content}))
+        # print("res: ", res)
+        # print("res.content: ", res.content)
+        response_text = res.content[0].text
+        self.messages.append({"role": res.role, "content": response_text})
         return {
             "type": "object",
             "data": {
-                "message": new_message,
+                "text": response_text ,
             }
         }
 
@@ -191,7 +195,7 @@ class AnthropicChat(ChatABC):
                     yield {
                         "type": "object",
                         "data": {
-                            "message": new_message,
+                            "text": new_message["content"],
                         },
                     }
 
@@ -235,17 +239,17 @@ class CohereChat(ChatABC):
             connectors=[{"id": "web-search"}] if self.web_search else None,
         )
 
-        self.messages.append((new_message:={"role": "USER", "message": text}))
-        self.messages.append((new_message:={"role": "CHATBOT", "message": res['text']}))
+        self.messages.append({"role": "USER", "message": text})
+        self.messages.append({"role": "CHATBOT", "message": res.text})
 
         return {
             "type": "object",
             "data": {
-                "message": new_message,
-                "citations": res.get("citations", []),
-                "search_results": res.get("search_results", []),
-                "documents": res.get("documents", []),
-                "search_queries": res.get("search_queries", []),
+                "text": res.text,
+                "citations": res.citations,
+                "search_results": res.search_results,
+                "documents": res.documents,
+                "search_queries": res.search_queries,
             },
         }
 
@@ -282,7 +286,7 @@ class CohereChat(ChatABC):
                 yield {
                     "type": "object",
                     "data": {
-                        "message": new_message, # could also be {"role": "CHATBOT", "message": event['response']['text']}
+                        "text": new_message["message"], 
                         "token_count": event['response']['token_count'],
                         "citations": event['response'].get("citations", []),
                         "search_results": event['response'].get("search_results", []),

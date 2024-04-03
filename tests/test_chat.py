@@ -20,22 +20,4 @@ def test_chat_factory():
 
     # invalid model
     with pytest.raises(Exception):
-        chat = Chat("invalid model", temperature, max_tokens, system_prompt)    
-
-def test_chat_openai():
-    pass
-
-def test_chat_openai_stream():
-    pass
-
-def test_chat_anthropic():
-    pass
-
-def test_chat_anthropic_stream():
-    pass
-
-def test_chat_cohere():
-    pass
-
-def test_chat_cohere_stream():
-    pass
+        chat = Chat("invalid model", temperature, max_tokens, system_prompt)
