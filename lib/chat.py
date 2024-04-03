@@ -48,6 +48,21 @@ class ChatABC(ABC):
         """Chat with the model and yield the response."""
         pass
 
+    def print_stream(self, text: str, line_size: int = 22) -> Dict[str, any]:
+        """Print the response text as it comes in, and return the final response object."""
+        
+        for i, response in enumerate(output:=self.chat_stream(text)):
+            if response is None:
+                continue # skip empty responses
+            if response["type"] == "text": # if response is text, print it
+                text = response["data"]
+                if i % line_size == 0 and i !=0:
+                    print(text) # print response with new line every 22 responses
+                else:
+                    print(text, end="") # print response without new line
+            elif response["type"] == "object": # if stream is over, return the final response object
+                return response
+
     def __repr__(self):
         return f"{self.__class__.__name__}(model={self.model_name}, temperature={self.temperature}, max_tokens={self.max_tokens}, system_prompt={self.system_prompt if len(self.system_prompt) < 20 else self.system_prompt[:20] + '...'}, debug={self.debug})"
 
@@ -105,10 +120,10 @@ class OpenAIChat(ChatABC):
         new_message = {"role": "assistant", "content": ""}
 
         for chunk in res_stream:
-            if chunk.choices[0].delta.get("content"):
-                content = chunk.choices[0].delta["content"]
-                new_message["content"] += content
-                yield {"type": "text", "data": content}
+            if chunk.choices[0].delta:
+                if content := chunk.choices[0].delta.content:
+                    new_message["content"] += content
+                    yield {"type": "text", "data": content}
 
             # TODO - Add support for tool caling, other stuff sent back 
             if chunk.choices[0].finish_reason:
