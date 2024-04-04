@@ -1,0 +1,4 @@
+[tool.pytest.ini_options]
+markers = [
+    "external: mark a test as an external to run only with --external option.",
+]

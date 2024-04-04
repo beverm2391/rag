@@ -21,6 +21,10 @@ This is a work in progress. Right now I'm finishing up the core abstractions. Ev
 - `utils.py`
   - pretty self explanatory, just utils and configuration
 
+## Running Tests
+
+- use `pytest` to run all local tests
+- use `pytest --external` to run all local tests, including those that make external API calls (which can take a while)
 
 ## Changelog
 
@@ -33,13 +37,13 @@ This is a work in progress. Right now I'm finishing up the core abstractions. Ev
 - [X] finish the Cohere class in `chat.py`
 - [X] finish the Chat factory class
 - [x] add tests for Chat factory class
+- [X] add ask_stream function to the abstract chat class
 
 ## TODO
 - [ ] sanity check all the new abstractions (see `notebooks/tests/sanity-check-chat.ipynb`)
-- [ ] add tests to all `chat.py` abstractions
-- [X] add ask_stream function to the abstract chat class
+  - [ ] finish cohere stream, others are working
+- [ ] get all `chat.py` tests passing
 - [ ] figure out auto nest_asyncio
-- [ ] figure out how you want to test this repo - pytest probably
 - [ ] build and text the ability to generate queries that include the best location/db to search for
 - [ ] Add tool calls for openai and Anthropic
 - [ ] add Instructor support for Chat models
