@@ -7,8 +7,11 @@ from time import perf_counter
 import asyncio
 import anthropic
 from anthropic import Anthropic, AsyncAnthropic
+import nest_asyncio
+nest_asyncio.apply()
 
-from lib.utils import load_env, MODELS
+from lib.utils import load_env, auto_nest_asyncio
+from lib.model_config import MODELS
 from lib.models import Queries, Query
 
 vars = load_env(['OPENAI_API_KEY', 'ANTHROPIC_API_KEY']) # load all vars, ensuring that a env exists and the expected vars are present

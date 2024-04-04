@@ -5,7 +5,8 @@ from anthropic import Anthropic
 import cohere
 import instructor
 
-from lib.utils import MODELS, load_env
+from lib.utils import load_env
+from lib.model_config import MODELS
 
 # TODO: The plan here is to have support for OpenAI, Anthropic, Cohere, and so on in one unified API
 # This is so we can just plug the same code into any of these services and have it work
