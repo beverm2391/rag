@@ -54,7 +54,7 @@ class Rag:
                 # TODO add the truncated context here
                 break
             
-            contexts += f"Context: {i}, Relevance Score: {score}, Data: {string}"
+            contexts += f"Context: {i+1}, Relevance Score: {score}, Data: {string}"
             tokens_left -= context_tokens
 
         a  = f"INSTRUCTION: {self.instruction}\n\n"

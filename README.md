@@ -42,6 +42,7 @@ This is a work in progress. Right now I'm finishing up the core abstractions. Ev
 ## TODO
 - [ ] sanity check all the new abstractions (see `notebooks/tests/sanity-check-chat.ipynb`)
   - [ ] finish cohere stream, others are working
+- [ ] make a full RAG abstraction
 - [ ] get all `chat.py` tests passing
 - [ ] figure out auto nest_asyncio
 - [ ] build and text the ability to generate queries that include the best location/db to search for
