@@ -7,6 +7,11 @@ from pptx import Presentation
 import tiktoken
 from functools import wraps
 import inspect
+import cohere
+import anthropic
+import openai
+
+from lib.model_config import MODELS
 
 def load_env(expected_vars: list = []):
     env = load_dotenv()
@@ -73,3 +78,24 @@ def validate_stream(res):
             assert False, "Error in stream"
         finally:
             pass
+
+class Models:
+    _models = MODELS
+    _env = load_env()
+
+    @staticmethod
+    def cohere():
+        """Return a list of all models from the Cohere API."""
+        client = cohere.Client(api_key=Models._env['COHERE_API_KEY'])
+        return [model.__dict__ for model in client.models.list().models]
+
+    # TODO - add Anthropics models (couldn't find a method to list models in the API docs)
+    # ? DOCS: https://docs.anthropic.com/claude/docs/models-overview
+    @staticmethod
+    def anthropic():
+        pass
+
+    @staticmethod
+    def openai():
+        client = openai.Client(api_key=Models._env['OPENAI_API_KEY'])
+        return [model.__dict__ for model in client.models.list()]

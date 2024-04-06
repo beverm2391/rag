@@ -20,7 +20,7 @@ def example_prompt(): return "What is the meaning of life?"
 @pytest.mark.external
 def test_chat_openai(example_args, example_prompt):
 
-    chat = Chat("gpt-3.5-turbo", *example_args)
+    chat = Chat.create("gpt-3.5-turbo", *example_args)
     res = chat.chat(example_prompt)
     text = res['data']['text']
 
@@ -29,7 +29,7 @@ def test_chat_openai(example_args, example_prompt):
 
 @pytest.mark.external
 def test_chat_anthropic(example_args, example_prompt):
-    chat = Chat("claude-3-haiku", *example_args)
+    chat = Chat.create("claude-3-haiku", *example_args)
     res = chat.chat(example_prompt)
     text = res['data']['text']
 
@@ -38,7 +38,7 @@ def test_chat_anthropic(example_args, example_prompt):
 
 @pytest.mark.external
 def test_chat_cohere(example_args, example_prompt):
-    chat = Chat("command-r", *example_args)
+    chat = Chat.create("command-r", *example_args)
     res = chat.chat(example_prompt)
     text = res['data']['text']
 
@@ -50,18 +50,19 @@ def test_chat_cohere(example_args, example_prompt):
 
 @pytest.mark.external
 def test_chat_openai_stream(example_args, example_prompt):
-    chat = Chat("gpt-3.5-turbo", *example_args)
+    chat = Chat.create("gpt-3.5-turbo", *example_args)
     res = chat.chat_stream(example_prompt)
     validate_stream(res)
 
 @pytest.mark.external
 def test_chat_anthropic_stream(example_args, example_prompt):
-    chat = Chat("claude-3-haiku", *example_args)
+    chat = Chat.create("claude-3-haiku", *example_args)
     res = chat.chat_stream(example_prompt)
     validate_stream(res)
 
-# @pytest.mark.external
-# def test_chat_cohere_stream(example_args, example_prompt):
-#     chat = Chat("command-r", *example_args)
-#     res = chat.chat_stream(example_prompt)
-#     validate_stream(res)
+@pytest.mark.external
+def test_chat_cohere_stream(example_args, example_prompt):
+    example_args = [example_args[0], 1000, example_args[2]] # ? The command-light model has a context_window of 4096 so we need to reduce the max_tokens
+    chat = Chat.create("command-light", *example_args)
+    res = chat.chat_stream(example_prompt)
+    validate_stream(res)

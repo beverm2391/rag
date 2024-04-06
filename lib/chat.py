@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import Generator, Dict, List
+from typing import Generator, Dict, List, Type, Union
 from openai import OpenAI
 from anthropic import Anthropic
 import cohere
 import instructor
+import functools
 
 from lib.utils import load_env
 from lib.model_config import MODELS
@@ -51,7 +52,8 @@ class ChatABC(ABC):
 
     def print_stream(self, text: str, line_size: int = 22) -> Dict[str, any]:
         """Print the response text as it comes in, and return the final response object."""
-        
+        res_list = []
+
         for i, response in enumerate(output:=self.chat_stream(text)):
             if response is None:
                 continue # skip empty responses
@@ -61,8 +63,10 @@ class ChatABC(ABC):
                     print(text) # print response with new line every 22 responses
                 else:
                     print(text, end="") # print response without new line
-            elif response["type"] == "object": # if stream is over, return the final response object
-                return response
+            elif response["type"] == "object": # if response is an object, append it to a list to be returned
+                res_list.append(response)
+
+        return res_list # return the list of response objects
 
     def __repr__(self):
         return f"{self.__class__.__name__}(model={self.model_name}, temperature={self.temperature}, max_tokens={self.max_tokens}, system_prompt={self.system_prompt if len(self.system_prompt) < 20 else self.system_prompt[:20] + '...'}, debug={self.debug})"
@@ -275,7 +279,7 @@ class CohereChat(ChatABC):
         res_stream = self.client.chat_stream(
             model=self.model_var,
             chat_history=self.messages,
-            message={"role": "USER", "message": text},
+            message=text,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
             connectors=[{"id": "web-search"}] if self.web_search else None,
@@ -285,29 +289,34 @@ class CohereChat(ChatABC):
 
         for event in res_stream:
             if self.debug: print("event: ", event)
-            if event['event_type'] == "stream_start":
+            if event.event_type == "stream_start":
                 pass
-            elif event['event_type'] == "text-generation":
-                new_message["message"] += event['text']
+            elif event.event_type == "search-queries-generation":
+                yield {"type": "object", "data": event.search_queries}
+            elif event.event_type == "text-generation":
+                new_message["message"] += event.text
                 yield {"type": "text", "data": event.text}
-            elif event['event_type'] == "search-results":                
-                # search_results.extend(event['search_results'])
-                # documents.extend(event['documents'])
-                pass
-            elif event['event_type'] == "citation-generation":
-                # citations.extend(event['citations'])
-                pass
-            elif event['event_type'] == "stream_end":
+            elif event.event_type == "search-results":                
+                yield {"type": "object", "data": {
+                    "search_results": event.search_results,
+                    "documents": event.documents,
+                }}
+            elif event.event_type == "citation-generation":
+                yield {"type": "object", "data": event.citations}
+            elif event.event_type == "stream-end":
                 self.messages.append(new_message)
                 yield {
                     "type": "object",
                     "data": {
                         "text": new_message["message"], 
-                        "token_count": event['response']['token_count'],
-                        "citations": event['response'].get("citations", []),
-                        "search_results": event['response'].get("search_results", []),
-                        "documents": event['response'].get("documents", []),
-                        "search_queries": event['response'].get("search_queries", []),
+                        "tool_calls": event.response.tool_calls,
+                        "citations": event.response.citations,
+                        "search_results": event.response.search_results,
+                        "documents": event.response.documents,
+                        "search_queries": event.response.search_queries,
+                        "is_search_required": event.response.is_search_required,
+                        "meta" : event.response.meta,
+                        "chat_history": [{"role" : m['role'], "message": m['message']} for m in self.messages],
                     },
                 }
 
@@ -317,26 +326,34 @@ class InstructorOpenAIChat(ChatABC):
 class InstructorAnthropicChat(ChatABC):
     pass
 
-# TODO: Then we'll have a factory function/class that will return the correct chat class based on the model
-    
+
 class Chat:
     _models = MODELS
 
-    def __new__(cls,
-            model_name: str, temperature: float, max_tokens: int, system_prompt: str,
-            debug: bool = False, **kwargs
-            ):
+    def __init__(self, model_name: str, temperature: float, max_tokens: int, system_prompt: str, model_var: str, context_window: int, debug: bool = False, **kwargs):
+        self.model_name = model_name
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+        self.system_prompt = system_prompt
+        self.model_var = model_var
+        self.context_window = context_window
+        self.debug = debug
+        self.kwargs = kwargs
+
+    @classmethod
+    def create(cls, model_name: str, temperature: float, max_tokens: int, system_prompt: str, debug: bool = False, **kwargs) -> \
+        Union['OpenAIChat', 'AnthropicChat', 'CohereChat']:
 
         assert model_name in cls._models, f"Model {model_name} not found in model config"
-
-        _model = cls._models[model_name]
-        model_var = _model.get('model_var', None)
-        org = _model.get('org', None)
-        context_window = _model.get('context_window', None)
+        model = cls._models[model_name]
+        model_var = model.get('model_var', None)
+        org = model.get('org', None)
+        context_window = model.get('context_window', None)
 
         assert org is not None, f"Organization missing for {model_name} in model config"
         assert model_var is not None, f"Model Var missing for {model_name} in model config"
         assert context_window is not None, f"Context Window missing for {model_name} in model config"
+        assert context_window >= max_tokens, f"Context window {context_window} must be greater than max tokens {max_tokens}"
 
         if debug:
             print(f"Model_name: {model_name}")
@@ -346,11 +363,14 @@ class Chat:
 
         if org == "openai":
             if debug: print(f"Creating {model_name} chat instance.")
-            return OpenAIChat(model_name, temperature, max_tokens, system_prompt, model_var=model_var, context_window=context_window, debug=debug, **kwargs)
+            instance = OpenAIChat(model_name, temperature, max_tokens, system_prompt, model_var=model_var, context_window=context_window, debug=debug, **kwargs)
         elif org == "anthropic":
             if debug: print(f"Creating {model_name} chat instance.")
-            return AnthropicChat(model_name, temperature, max_tokens, system_prompt, model_var=model_var, context_window=context_window, debug=debug, **kwargs)
+            instance: AnthropicChat = AnthropicChat(model_name, temperature, max_tokens, system_prompt, model_var=model_var, context_window=context_window, debug=debug, **kwargs)
         elif org == "cohere":
             if debug: print(f"Creating {model_name} chat instance.")
-            return CohereChat(model_name, temperature, max_tokens, system_prompt, model_var=model_var, context_window=context_window, debug=debug, **kwargs)
-        else: raise ValueError(f"Model {model_name} not supported")
+            instance: CohereChat = CohereChat(model_name, temperature, max_tokens, system_prompt, model_var=model_var, context_window=context_window, debug=debug, **kwargs)
+        else:
+            raise ValueError(f"Model {model_name} not supported")
+
+        return instance

@@ -18,7 +18,7 @@ class Rag:
         system_prompt = system_prompt if system_prompt else self._defaults["system_prompt"] # revert to default if not provided
 
         self.instruction = instruction
-        self._chat = Chat(model_name, temperature, max_tokens, system_prompt, debug) # THIS NEEDS TO BE PREFIXED WITH AN UNDERSCORE TO AVOID METHOD CONFLICTS
+        self._chat = Chat.create(model_name, temperature, max_tokens, system_prompt, debug) # THIS NEEDS TO BE PREFIXED WITH AN UNDERSCORE TO AVOID METHOD CONFLICTS
 
     def process_text(self, text: str, chunk_size: int = 1000, overwrite=False) -> Index:
         """Embed text and add to index."""

@@ -33,17 +33,19 @@ This is a work in progress. Right now I'm finishing up the core abstractions. Ev
 - [X] add reranking to the index class
 - [X] Implement the multiple query inside the index by searching all queries, then removing duplicates, before finally reranking
 
-### Week of 4/27
+### Week of 4/3
 - [X] finish the Cohere class in `chat.py`
 - [X] finish the Chat factory class
 - [x] add tests for Chat factory class
 - [X] add ask_stream function to the abstract chat class
-
+- [X] sanity check all the new abstractions (see `notebooks/tests/sanity-check-chat.ipynb`)
+  - [X] finish cohere stream, others are working
+- [X] make a full RAG abstraction
+- [X] get all `chat.py` tests passing
+- [X] updated `chat_stream` and `print_stream` to yield/return mulitple response objects
+  
 ## TODO
-- [ ] sanity check all the new abstractions (see `notebooks/tests/sanity-check-chat.ipynb`)
-  - [ ] finish cohere stream, others are working
-- [ ] make a full RAG abstraction
-- [ ] get all `chat.py` tests passing
+- [ ] expose an all purpose chat endpoint that takes in params and returns a stream (FastAPI)
 - [ ] figure out auto nest_asyncio
 - [ ] build and text the ability to generate queries that include the best location/db to search for
 - [ ] Add tool calls for openai and Anthropic
