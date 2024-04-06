@@ -12,9 +12,11 @@ import anthropic
 import openai
 import hashlib
 import uuid
+import requests
 
 from lib.model_config import MODELS
 
+# ! Environment Variables ========================
 def load_env(expected_vars: list = []):
     env = load_dotenv()
     assert env, "No .env file found"
@@ -22,6 +24,8 @@ def load_env(expected_vars: list = []):
     for var in expected_vars:
         assert os.getenv(var), f"Expected {var} in .env"
     return os.environ
+
+# ! Text Processing ========================
 
 def count_tokens(text: str, model: str = "gpt-4") -> int:
     encoding = tiktoken.encoding_for_model(model)
@@ -48,6 +52,8 @@ def PPTX_to_text(path: str):
                     text_runs.append(run.text)
     return "\n".join(text_runs)
 
+# ! Asyncio Nesting ========================
+
 def auto_nest_asyncio(func):
     import nest_asyncio
 
@@ -65,6 +71,8 @@ def auto_nest_asyncio(func):
     return wrapper
 
 
+# ! Stream Validation ========================
+
 def validate_stream(res):
     """Helper function to validate a generator."""
     assert res is not None, "Chat response is None"
@@ -81,10 +89,20 @@ def validate_stream(res):
         finally:
             pass
 
+
+# ! Server API Key Generation ========================
+
 def gen_api_key():
     data = str(uuid.uuid4()).encode('utf-8')
     return hashlib.sha256(data).hexdigest()
 
+
+# ! HTTP Requests ========================
+
+def post(URL: str, headers: dict = {}, data: dict = {}): return requests.post(URL, headers=headers, json=data)
+def get(URL: str, headers: dict = {}, params: dict = {}): return requests.get(URL, headers=headers, params=params)
+
+# ! List Available Models ========================
 class Models:
     _models = MODELS
     _env = load_env()

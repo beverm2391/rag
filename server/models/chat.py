@@ -1,5 +1,5 @@
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # ! Requests Models ========================
 class Message(BaseModel):
@@ -8,9 +8,9 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[Message]
-    max_tokens: Optional[int]
-    temperature: Optional[float]
-    model: Optional[str]
+    max_tokens: Optional[int] = Field(default=None)
+    temperature: Optional[float] = Field(default=None)
+    model: Optional[str] = Field(default=None)
 
 # ! Response Models ========================
 class ChatResponseData(BaseModel):

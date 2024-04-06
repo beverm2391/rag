@@ -3,7 +3,19 @@ from fastapi import Depends
 from fastapi.middleware.cors import CORSMiddleware
 
 from middleware import AuthMiddleWare
-from server.config import debug
+from server.config import logger
+
+# ! Set up logging ========================
+
+#? Options:
+# CRITICAL = 50
+# FATAL = CRITICAL
+# ERROR = 40
+# WARNING = 30
+# WARN = WARNING
+# INFO = 20
+# DEBUG = 10
+# NOTSET = 0
 
 # ! Import the routes ========================
 from routes import example, chat
@@ -14,7 +26,7 @@ app = FastAPI()
 # ! Add the middleware ========================
 
 app.add_middleware(AuthMiddleWare) # this has to be added before the CORS middleware as to not block the CORS preflight request
-if debug: print("Auth middleware added")
+logger.debug("Auth middleware added")
 
 # TODO - seal this up
 origins = [
@@ -28,7 +40,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-if debug: print("CORS middleware added")
+logger.debug("CORS middleware added")
 
 # ! Add the routes ========================
 

@@ -45,12 +45,14 @@ This is a work in progress. Right now I'm finishing up the core abstractions. Ev
 - [X] updated `chat_stream` and `print_stream` to yield/return mulitple response objects
 - [X] got a FastAPI server running, configured globals, middleware, routes, and models
 - [X] got the `/chat` endpoint working with OAI
-   
+- [X] figure out how to make the temp, model, and max_tokens params optional in `server/models/chat`
+- [X] sanity check in a notebook the `/chat` endpoint with OAI, Anthropic, and Cohere
+- [X] might have to make separate response objects for these
+- [X] implement tests in `tests/server/routes/chat`
+  
 ## TODO
-- [ ] figure out how to make the temp, model, and max_tokens params optional in `server/models/chat`
-- [ ] sanity check in a notebook the `/chat` endpoint with OAI, Anthropic, and Cohere
-  - [ ] might have to make separate response objects for these
-  - [ ] implement tests in `tests/server/routes/chat`
+- [ ] move server prints to logging?
+- [ ] get the streaming endpoint working
 - [ ] expose an all purpose chat endpoint that takes in params and returns a stream (FastAPI)
 - [ ] figure out auto nest_asyncio
 - [ ] build and text the ability to generate queries that include the best location/db to search for

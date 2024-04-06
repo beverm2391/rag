@@ -80,6 +80,6 @@ DEFAULTS = {
     "system_prompt" : "You are a helpful assistend designed to answer questions based on the context provided.",
     "top_n" : 30,
     "model": "gpt-3.5-turbo",
-    "max_tokens": 4096,
+    "max_tokens": 4000,
     "temperature": 0,
 }
