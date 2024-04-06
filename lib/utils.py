@@ -10,6 +10,8 @@ import inspect
 import cohere
 import anthropic
 import openai
+import hashlib
+import uuid
 
 from lib.model_config import MODELS
 
@@ -78,6 +80,10 @@ def validate_stream(res):
             assert False, "Error in stream"
         finally:
             pass
+
+def gen_api_key():
+    data = str(uuid.uuid4()).encode('utf-8')
+    return hashlib.sha256(data).hexdigest()
 
 class Models:
     _models = MODELS
