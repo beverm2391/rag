@@ -5,6 +5,8 @@ from anthropic import Anthropic
 import cohere
 import instructor
 import functools
+import json
+from time import perf_counter
 
 from lib.utils import load_env
 from lib.model_config import MODELS
@@ -13,7 +15,7 @@ from lib.model_config import MODELS
 # This is so we can just plug the same code into any of these services and have it work
 # Ideally we'll have a rag class that 
 
-# chat class takex text in, and returns text out via a chat method
+# chat class takes text in, and returns text out via a chat method
 # expose the same chat methods (regular, streaming, etc) for all services
 # Then a rag class can just take in an Index and a Chat class and work with any service
 
@@ -26,7 +28,10 @@ COHERE_API_KEY = env.get("COHERE_API_KEY", None)
 
 class ChatABC(ABC):
     """Abstract base class for chat services."""
-    def __init__(self, model_name: str, temperature: float = 0, max_tokens: int = 2048, system_prompt: str = "You are a helpful assistant.", debug: bool = False):
+    def __init__(
+            self, model_name: str, temperature: float = 0, max_tokens: int = 2048, system_prompt: str = "You are a helpful assistant.",
+            debug: bool = False, as_json: bool = False, **kwargs
+        ):
         self.model_name = model_name
         self.model_var = None
         self.temperature = temperature
@@ -34,6 +39,7 @@ class ChatABC(ABC):
         self.system_prompt = system_prompt
         self.messages = []
         self.debug = debug
+        self.as_json = as_json
 
     @abstractmethod
     def _init_client(self):
@@ -76,7 +82,10 @@ class OpenAIChat(ChatABC):
     _name = "openai"
     _api_key = OPENAI_API_KEY
 
-    def __init__(self, model_name: str, temperature: float, max_tokens: int, system_prompt: str, debug: bool = False, model_var: str = None, context_window: int = 0):
+    def __init__(
+            self, model_name: str, temperature: float, max_tokens: int, system_prompt: str, 
+            debug: bool = False, model_var: str = None, context_window: int = 0, as_json: bool = False
+        ):
         super().__init__(model_name)
         self._init_client()
         self.temperature = temperature
@@ -84,6 +93,7 @@ class OpenAIChat(ChatABC):
         self.system_prompt = system_prompt
         self.model_var = model_var
         self.context_window = context_window
+        self.as_json = as_json
 
         self.messages = [
             {"role": "system", "content": system_prompt},
@@ -125,20 +135,23 @@ class OpenAIChat(ChatABC):
         new_message = {"role": "assistant", "content": ""}
 
         for chunk in res_stream:
+            if self.debug: print(f"event came in from external API at {perf_counter() * 1000:0.2f}ms")
             if chunk.choices[0].delta:
                 if content := chunk.choices[0].delta.content:
                     new_message["content"] += content
-                    yield {"type": "text", "data": content}
+                    dict_ = {"type": "text", "data": content}
+                    yield json.dumps(dict_) if self.as_json else dict_
 
             # TODO - Add support for tool caling, other stuff sent back 
             if chunk.choices[0].finish_reason:
                 self.messages.append(new_message)
-                yield {
+                dict_ = {
                     "type": "object",
                     "data": {
                         "text": new_message["content"],
                     },
                 }
+                yield json.dumps(dict_) if self.as_json else dict_
 
         self.messages.append(new_message)
 
@@ -147,7 +160,10 @@ class AnthropicChat(ChatABC):
     _name = "anthropic"
     _api_key = ANTHROPIC_API_KEY
 
-    def __init__(self, model_name: str, temperature: float, max_tokens: int, system_prompt: str, debug: bool = False, model_var: str = None, context_window: int = 0):
+    def __init__(
+            self, model_name: str, temperature: float, max_tokens: int, system_prompt: str, debug: bool = False,
+            model_var: str = None, context_window: int = 0, as_json: bool = False
+        ):
         super().__init__(model_name)
         self._init_client()
         self.temperature = temperature
@@ -155,6 +171,7 @@ class AnthropicChat(ChatABC):
         self.system_prompt = system_prompt
         self.model_var = model_var
         self.context_window = context_window
+        self.as_json = as_json
 
         self.messages = [] # claude doesn't use a system message like OAI
         # ? DOCS: https://docs.anthropic.com/claude/docs/system-prompts
@@ -196,29 +213,32 @@ class AnthropicChat(ChatABC):
             new_message = {"role": "assistant", "content": ""}
             
             for event in res_stream:
-                if self.debug: print("event: ", event)
+                if self.debug: print(f"event came in from external API at {perf_counter() * 1000:0.2f}ms")
                 if event.type == "mesage_start":
                     pass
                 elif event.type == "content_block_start":
                     text = event.content_block.text
                     new_message["content"] += text
-                    yield {"type": "text", "data": text} # content_block : {"type": "text", "text": "" }
+                    dict_ = {"type": "text", "data": text} # content_block : {"type": "text", "text": "" }
+                    yield json.dumps(dict_) if self.as_json else dict_
                 elif event.type == "content_block_delta":
                     text = event.delta.text
                     new_message["content"] += text
-                    yield {"type": "text", "data": text}
+                    dict_ = {"type": "text", "data": text}
+                    yield json.dumps(dict_) if self.as_json else dict_
                 elif event.type == "content_block_stop":
                     pass
                 elif event.type == "message_delta":
                     # data: {"type": "message_delta", "delta": {"stop_reason": "end_turn", "stop_sequence":null, "usage":{"output_tokens": 15}}}
                     pass
                 elif event.type == "message_stop":
-                    yield {
+                    dict_ = {
                         "type": "object",
                         "data": {
                             "text": new_message["content"],
                         },
                     }
+                    yield json.dumps(dict_) if self.as_json else dict_
 
             self.messages.append(new_message)
 
@@ -229,7 +249,8 @@ class CohereChat(ChatABC):
 
     def __init__(
             self, model_name: str, temperature: float, max_tokens: int, system_prompt: str, debug: bool = False,
-            model_var: str = None, context_window: int = 0, web_search: bool = False, citations: bool = False):
+            model_var: str = None, context_window: int = 0, web_search: bool = False, citations: bool = False, as_json: bool = False
+        ):
         super().__init__(model_name)
         self._init_client()
         self.temperature = temperature
@@ -239,6 +260,7 @@ class CohereChat(ChatABC):
         self.context_window = context_window
         self.web_search = web_search
         self.citations = citations
+        self.as_json = as_json
 
         self.messages = [
             {"role": "SYSTEM", "message": system_prompt},
@@ -288,24 +310,28 @@ class CohereChat(ChatABC):
         new_message = {"role": "CHATBOT", "message": ""}
 
         for event in res_stream:
-            if self.debug: print("event: ", event)
+            if self.debug: print(f"event came in from external API at {perf_counter() * 1000:0.2f}ms")
             if event.event_type == "stream_start":
                 pass
             elif event.event_type == "search-queries-generation":
-                yield {"type": "object", "data": event.search_queries}
+                dict_ = {"type": "object", "data": event.search_queries}
+                yield json.dumps(dict_) if self.as_json else dict_
             elif event.event_type == "text-generation":
                 new_message["message"] += event.text
-                yield {"type": "text", "data": event.text}
+                dict_ = {"type": "text", "data": event.text}
+                yield json.dumps(dict_) if self.as_json else dict_
             elif event.event_type == "search-results":                
-                yield {"type": "object", "data": {
+                dict_ = {"type": "object", "data": {
                     "search_results": event.search_results,
                     "documents": event.documents,
                 }}
+                yield json.dumps(dict_) if self.as_json else dict_
             elif event.event_type == "citation-generation":
-                yield {"type": "object", "data": event.citations}
+                dict_ = {"type": "object", "data": event.citations}
+                yield json.dumps(dict_) if self.as_json else dict_
             elif event.event_type == "stream-end":
                 self.messages.append(new_message)
-                yield {
+                dict_ = {
                     "type": "object",
                     "data": {
                         "text": new_message["message"], 
@@ -319,6 +345,7 @@ class CohereChat(ChatABC):
                         "chat_history": [{"role" : m['role'], "message": m['message']} for m in self.messages],
                     },
                 }
+                yield json.dumps(dict_) if self.as_json else dict_
 
 class InstructorOpenAIChat(ChatABC):
     pass
@@ -341,7 +368,7 @@ class Chat:
         self.kwargs = kwargs
 
     @classmethod
-    def create(cls, model_name: str, temperature: float, max_tokens: int, system_prompt: str, debug: bool = False, **kwargs) -> \
+    def create(cls, model_name: str, temperature: float, max_tokens: int, system_prompt: str, debug: bool = False, as_json: bool = False, **kwargs) -> \
         Union['OpenAIChat', 'AnthropicChat', 'CohereChat']:
 
         assert model_name in cls._models, f"Model {model_name} not found in model config"
@@ -355,21 +382,21 @@ class Chat:
         assert context_window is not None, f"Context Window missing for {model_name} in model config"
         assert context_window >= max_tokens, f"Context window {context_window} must be greater than max tokens {max_tokens}"
 
-        if debug:
-            print(f"Model_name: {model_name}")
-            print(f"Model Var: {model_var}")
-            print(f"Org: {org}")
-            print(f"Context Window: {context_window}")
+        # if debug:
+        #     print(f"Model_name: {model_name}")
+        #     print(f"Model Var: {model_var}")
+        #     print(f"Org: {org}")
+        #     print(f"Context Window: {context_window}")
 
         if org == "openai":
             if debug: print(f"Creating {model_name} chat instance.")
-            instance = OpenAIChat(model_name, temperature, max_tokens, system_prompt, model_var=model_var, context_window=context_window, debug=debug, **kwargs)
+            instance = OpenAIChat(model_name, temperature, max_tokens, system_prompt, model_var=model_var, context_window=context_window, debug=debug, as_json=as_json, **kwargs)
         elif org == "anthropic":
             if debug: print(f"Creating {model_name} chat instance.")
-            instance: AnthropicChat = AnthropicChat(model_name, temperature, max_tokens, system_prompt, model_var=model_var, context_window=context_window, debug=debug, **kwargs)
+            instance: AnthropicChat = AnthropicChat(model_name, temperature, max_tokens, system_prompt, model_var=model_var, context_window=context_window, debug=debug, as_json=as_json, **kwargs)
         elif org == "cohere":
             if debug: print(f"Creating {model_name} chat instance.")
-            instance: CohereChat = CohereChat(model_name, temperature, max_tokens, system_prompt, model_var=model_var, context_window=context_window, debug=debug, **kwargs)
+            instance: CohereChat = CohereChat(model_name, temperature, max_tokens, system_prompt, model_var=model_var, context_window=context_window, debug=debug, as_json=as_json, **kwargs)
         else:
             raise ValueError(f"Model {model_name} not supported")
 
