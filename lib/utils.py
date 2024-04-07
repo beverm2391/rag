@@ -141,18 +141,3 @@ def stream_dicts_as_json(dict_stream):
     for dict_item in dict_stream:
         json_str = json.dumps(dict_item) # Convert the dictionary to a JSON string
         yield f"data: {json_str}\n\n" # Format for SSE protocol and yield
-
-async def stream_dicts_as_json_async(dict_stream):
-    """
-    An async generator that takes a stream of dictionaries and yields each
-    as a serialized JSON string suitable for SSE (Server-Sent Events).
-
-    Args:
-    dict_stream (Async Iterator): An asynchronous iterator that yields dictionaries.
-
-    Yields:
-    str: A serialized JSON string for each dictionary, formatted for SSE.
-    """
-    async for dict_item in dict_stream:
-        json_str = json.dumps(dict_item) # Convert the dictionary to a JSON string
-        yield f"data: {json_str}\n\n" # Format for SSE protocol and yield

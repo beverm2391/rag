@@ -49,13 +49,11 @@ This is a work in progress. Right now I'm finishing up the core abstractions. Ev
 - [X] sanity check in a notebook the `/chat` endpoint with OAI, Anthropic, and Cohere
 - [X] might have to make separate response objects for these
 - [X] implement tests in `tests/server/routes/chat`
+- [X] move server prints to logging?
+- [X] get the streaming endpoint working
+- [X] expose an all purpose chat endpoint that takes in params and returns a stream (FastAPI)
   
 ## TODO
-- [ ] move server prints to logging?
-- [ ] get the streaming endpoint working
-- [ ] expose an all purpose chat endpoint that takes in params and returns a stream (FastAPI)
-- [ ] figure out auto nest_asyncio
 - [ ] build and text the ability to generate queries that include the best location/db to search for
 - [ ] Add tool calls for openai and Anthropic
 - [ ] add Instructor support for Chat models
-- [ ] move the models object from `utils.py` and to a .json config file 
