@@ -54,6 +54,7 @@ This is a work in progress. Right now I'm finishing up the core abstractions. Ev
 - [X] expose an all purpose chat endpoint that takes in params and returns a stream (FastAPI)
   
 ## TODO
+- [ ] check multiple message support for all models (Claude is not working rn)
 - [ ] build and text the ability to generate queries that include the best location/db to search for
 - [ ] Add tool calls for openai and Anthropic
 - [ ] add Instructor support for Chat models

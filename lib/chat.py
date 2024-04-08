@@ -106,14 +106,15 @@ class OpenAIChat(ChatABC):
         if self.debug: print(f"Initialized {self._name} client.")
 
     def chat(self, text: str) -> str:
+        self.messages.append({"role": "user", "content": text}) # add user message to messages list
         res = self.client.chat.completions.create(
             model=self.model_var,
-            messages=self.messages + [{"role": "user", "content": text}],
+            messages=self.messages,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
         )
         response_text = res.choices[0].message.content
-        self.messages.append({"role": "assistant", "content": response_text})
+        self.messages.append({"role": "assistant", "content": response_text})  # add assistant message to messages list
         # TODO - Add support for tool caling, other stuff sent back
         return {
             "type" : "object",
@@ -124,9 +125,10 @@ class OpenAIChat(ChatABC):
 
     # ? DOCS: https://platform.openai.com/docs/api-reference/chat/streaming
     def chat_stream(self, text: str) -> Generator[Dict[str, any], None, None]:
+        self.messages.append({"role": "user", "content": text}) # add user message to messages list
         res_stream = self.client.chat.completions.create(
             model=self.model_var,
-            messages=self.messages + [{"role": "user", "content": text}],
+            messages=self.messages,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
             stream=True,
@@ -153,7 +155,6 @@ class OpenAIChat(ChatABC):
                 }
                 yield json.dumps(dict_) if self.as_json else dict_
 
-        self.messages.append(new_message)
 
 class AnthropicChat(ChatABC):
     """Chat with Anthropic"""
@@ -183,9 +184,10 @@ class AnthropicChat(ChatABC):
         if self.debug: print(f"Initialized {self._name} client.")
 
     def chat(self, text: str) -> str:
+        self.messages.append({"role": "user", "content": text})
         res = self.client.messages.create(
             model=self.model_var,
-            messages=self.messages + [{"role": "user", "content": text}],
+            messages=self.messages,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
             system=self.system_prompt,
@@ -203,9 +205,10 @@ class AnthropicChat(ChatABC):
 
     # ? DOCS: https://docs.anthropic.com/claude/reference/messages-streaming
     def chat_stream(self, text: str) -> Generator[str, None, None]:
+        self.messages.append({"role": "user", "content": text})
         with self.client.messages.stream (
             model=self.model_var,
-            messages=self.messages + [{"role": "user", "content": text}],
+            messages=self.messages,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
         ) as res_stream:
@@ -239,8 +242,8 @@ class AnthropicChat(ChatABC):
                         },
                     }
                     yield json.dumps(dict_) if self.as_json else dict_
+                    self.messages.append(new_message)
 
-            self.messages.append(new_message)
 
 class CohereChat(ChatABC):
     """Chat with Cohere"""
@@ -282,7 +285,7 @@ class CohereChat(ChatABC):
             connectors=[{"id": "web-search"}] if self.web_search else None,
         )
 
-        self.messages.append({"role": "USER", "message": text})
+        self.messages.append({"role": "USER", "message": text}) # append after because cohere takes separate chat history and query
         self.messages.append({"role": "CHATBOT", "message": res.text})
 
         return {
@@ -307,6 +310,7 @@ class CohereChat(ChatABC):
             connectors=[{"id": "web-search"}] if self.web_search else None,
         )
 
+        self.messages.append({"role": "USER", "message": text})
         new_message = {"role": "CHATBOT", "message": ""}
 
         for event in res_stream:

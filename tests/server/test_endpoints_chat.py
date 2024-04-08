@@ -36,6 +36,7 @@ def test_endpoint_chat_openai(messages, URL, HEADERS):
     assert parsed['data'] is not None
     assert parsed['data']['text'] != ''
 
+
 @pytest.mark.external
 def test_endpoint_chat_anthropic(messages, URL, HEADERS):
     data = {
