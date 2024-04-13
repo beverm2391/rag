@@ -57,11 +57,15 @@ class Rag:
             contexts += f"Context: {i+1}, Relevance Score: {score}, Data: {string}"
             tokens_left -= context_tokens
 
+        if self.debug: print(f"Contexts: {top_n} Tokens: {self.count_tokens(contexts)}")
+
         a  = f"INSTRUCTION: {self.instruction}\n\n"
         b = f"RELEVANT CONTEXTS:\n{contexts}\n\n"
         c = f"QUERY: {query}\n\n"
         d = f"ANSWER:"
         final_prompt = a + b + c + d
+
+        if self.debug: print(f"Total prompt (input) tokens: {self.count_tokens(final_prompt)}")
 
         # logging and sanity checks
         if self.debug: print(f"FINAL PROMPT\n\n{final_prompt}\n\n")

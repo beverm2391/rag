@@ -47,13 +47,18 @@ This is a work in progress. Right now I'm finishing up the core abstractions. Ev
 - [X] got the `/chat` endpoint working with OAI
 - [X] figure out how to make the temp, model, and max_tokens params optional in `server/models/chat`
 - [X] sanity check in a notebook the `/chat` endpoint with OAI, Anthropic, and Cohere
-- [X] might have to make separate response objects for these
 - [X] implement tests in `tests/server/routes/chat`
 - [X] move server prints to logging?
 - [X] get the streaming endpoint working
 - [X] expose an all purpose chat endpoint that takes in params and returns a stream (FastAPI)
   
+### Week of 4/10
+
+
 ## TODO
+- [ ] add logging config for lib
+- [ ] add usage printing per request/response in Debug mode
+- [ ] add usage/cost monitoring per instance 
 - [ ] check multiple message support for all models (Claude is not working rn)
 - [ ] build and text the ability to generate queries that include the best location/db to search for
 - [ ] Add tool calls for openai and Anthropic

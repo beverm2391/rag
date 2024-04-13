@@ -154,6 +154,9 @@ class OpenAIChat(ChatABC):
                     },
                 }
                 yield json.dumps(dict_) if self.as_json else dict_
+        
+        yield "event: end\ndata: \n\n"  # Signal the end of the stream
+
 
 
 class AnthropicChat(ChatABC):

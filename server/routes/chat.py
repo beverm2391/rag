@@ -6,7 +6,9 @@ from models.chat import ChatRequest, ChatResponse
 
 from lib.chat import Chat
 from server.config import DEFAULTS, logger, debug_bool
-from lib.utils import stream_dicts_as_json, stream_dicts_as_json_async
+from lib.utils import stream_dicts_as_json
+from time import sleep
+import json
 
 router = APIRouter()
 
@@ -72,3 +74,13 @@ def endpoint_chat_stream_post(req: ChatRequest) -> StreamingResponse:
     prompt = messages[-1]['content']
     stream = stream_dicts_as_json(chat.chat_stream(prompt)) # ? Convert the dict generator to a stream of JSON strings
     return StreamingResponse(stream, media_type="text/event-stream") 
+
+@router.post("/test")
+def endpoint_chat_test(req: ChatRequest) -> StreamingResponse:
+    def example_generator_every_second():
+        for i in range(10):
+            yield json.dumps({"type": "test", "data": f"Hello, {i}"})
+            sleep(1)
+        yield json.dumps({"type": "object", "data": "end of stream"})
+
+    return StreamingResponse(example_generator_every_second(), media_type="text/event-stream")
