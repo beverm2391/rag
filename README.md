@@ -56,9 +56,12 @@ This is a work in progress. Right now I'm finishing up the core abstractions. Ev
 
 
 ## TODO
+- [ ] integrate LlaMA 3 70B and 400B when it drops!!
+- [ ] change the default RAG to persist=False
 - [ ] add logging config for lib
 - [ ] add usage printing per request/response in Debug mode
 - [ ] add usage/cost monitoring per instance 
+- [ ] add [rerank 3](https://twitter.com/aidangomez/status/1778416325628424339?s=42&t=xWkJ8jxhhZSSUcSQM9eZIQ)
 - [ ] check multiple message support for all models (Claude is not working rn)
 - [ ] build and text the ability to generate queries that include the best location/db to search for
 - [ ] Add tool calls for openai and Anthropic

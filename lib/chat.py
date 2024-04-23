@@ -30,7 +30,7 @@ class ChatABC(ABC):
     """Abstract base class for chat services."""
     def __init__(
             self, model_name: str, temperature: float = 0, max_tokens: int = 2048, system_prompt: str = "You are a helpful assistant.",
-            debug: bool = False, as_json: bool = False, **kwargs
+            debug: bool = False, as_json: bool = False, persist=False, **kwargs
         ):
         self.model_name = model_name
         self.model_var = None
@@ -40,6 +40,7 @@ class ChatABC(ABC):
         self.messages = []
         self.debug = debug
         self.as_json = as_json
+        self.persist = persist
 
     @abstractmethod
     def _init_client(self):
@@ -84,7 +85,7 @@ class OpenAIChat(ChatABC):
 
     def __init__(
             self, model_name: str, temperature: float, max_tokens: int, system_prompt: str, 
-            debug: bool = False, model_var: str = None, context_window: int = 0, as_json: bool = False
+            debug: bool = False, model_var: str = None, context_window: int = 0, as_json: bool = False, persist=False
         ):
         super().__init__(model_name)
         self._init_client()
@@ -94,6 +95,7 @@ class OpenAIChat(ChatABC):
         self.model_var = model_var
         self.context_window = context_window
         self.as_json = as_json
+        self.persist = persist
 
         self.messages = [
             {"role": "system", "content": system_prompt},
@@ -106,6 +108,7 @@ class OpenAIChat(ChatABC):
         if self.debug: print(f"Initialized {self._name} client.")
 
     def chat(self, text: str) -> str:
+        if not self.persist: self.messages = [{"role": "system", "content": self.system_prompt}]  # reset messages list if persist is False
         self.messages.append({"role": "user", "content": text}) # add user message to messages list
         res = self.client.chat.completions.create(
             model=self.model_var,
@@ -125,6 +128,7 @@ class OpenAIChat(ChatABC):
 
     # ? DOCS: https://platform.openai.com/docs/api-reference/chat/streaming
     def chat_stream(self, text: str) -> Generator[Dict[str, any], None, None]:
+        if not self.persist: self.messages = [{"role": "system", "content": self.system_prompt}]  # reset messages list if persist is False
         self.messages.append({"role": "user", "content": text}) # add user message to messages list
         res_stream = self.client.chat.completions.create(
             model=self.model_var,
@@ -166,7 +170,7 @@ class AnthropicChat(ChatABC):
 
     def __init__(
             self, model_name: str, temperature: float, max_tokens: int, system_prompt: str, debug: bool = False,
-            model_var: str = None, context_window: int = 0, as_json: bool = False
+            model_var: str = None, context_window: int = 0, as_json: bool = False, persist=False
         ):
         super().__init__(model_name)
         self._init_client()
@@ -176,6 +180,7 @@ class AnthropicChat(ChatABC):
         self.model_var = model_var
         self.context_window = context_window
         self.as_json = as_json
+        self.persist = persist
 
         self.messages = [] # claude doesn't use a system message like OAI
         # ? DOCS: https://docs.anthropic.com/claude/docs/system-prompts
@@ -187,6 +192,7 @@ class AnthropicChat(ChatABC):
         if self.debug: print(f"Initialized {self._name} client.")
 
     def chat(self, text: str) -> str:
+        if not self.persist: self.messages = []  # reset messages list if persist is False
         self.messages.append({"role": "user", "content": text})
         res = self.client.messages.create(
             model=self.model_var,
@@ -199,6 +205,7 @@ class AnthropicChat(ChatABC):
         # print("res.content: ", res.content)
         response_text = res.content[0].text
         self.messages.append({"role": res.role, "content": response_text})
+        if not self.persist: self.messages = []  # reset messages list if persist is False
         return {
             "type": "object",
             "data": {
@@ -208,6 +215,7 @@ class AnthropicChat(ChatABC):
 
     # ? DOCS: https://docs.anthropic.com/claude/reference/messages-streaming
     def chat_stream(self, text: str) -> Generator[str, None, None]:
+        if not self.persist: self.messages = []  # reset messages list if persist is False
         self.messages.append({"role": "user", "content": text})
         with self.client.messages.stream (
             model=self.model_var,
@@ -255,7 +263,7 @@ class CohereChat(ChatABC):
 
     def __init__(
             self, model_name: str, temperature: float, max_tokens: int, system_prompt: str, debug: bool = False,
-            model_var: str = None, context_window: int = 0, web_search: bool = False, citations: bool = False, as_json: bool = False
+            model_var: str = None, context_window: int = 0, web_search: bool = False, citations: bool = False, as_json: bool = False, persist=False
         ):
         super().__init__(model_name)
         self._init_client()
@@ -267,6 +275,7 @@ class CohereChat(ChatABC):
         self.web_search = web_search
         self.citations = citations
         self.as_json = as_json
+        self.persist = persist
 
         self.messages = [
             {"role": "SYSTEM", "message": system_prompt},
@@ -279,6 +288,7 @@ class CohereChat(ChatABC):
         if self.debug: print(f"Initialized {self._name} client.")
 
     def chat(self, text: str) -> str:
+        if not self.persist: self.messages = [{"role": "SYSTEM", "message": self.system_prompt}]
         res = self.client.chat(
             model=self.model_var,
             chat_history=self.messages,
@@ -304,6 +314,7 @@ class CohereChat(ChatABC):
 
     # ? DOCS: https://docs.cohere.com/docs/streaming#retrieval-augmented-generation-stream-events
     def chat_stream(self, text: str) -> Generator[str, None, None]:
+        if not self.persist: self.messages = [{"role": "SYSTEM", "message": self.system_prompt}]
         res_stream = self.client.chat_stream(
             model=self.model_var,
             chat_history=self.messages,
@@ -364,7 +375,7 @@ class InstructorAnthropicChat(ChatABC):
 class Chat:
     _models = MODELS
 
-    def __init__(self, model_name: str, temperature: float, max_tokens: int, system_prompt: str, model_var: str, context_window: int, debug: bool = False, **kwargs):
+    def __init__(self, model_name: str, temperature: float, max_tokens: int, system_prompt: str, model_var: str, context_window: int, debug: bool = False, persist: bool = False, **kwargs):
         self.model_name = model_name
         self.temperature = temperature
         self.max_tokens = max_tokens
@@ -372,10 +383,11 @@ class Chat:
         self.model_var = model_var
         self.context_window = context_window
         self.debug = debug
+        self.persist = False
         self.kwargs = kwargs
 
     @classmethod
-    def create(cls, model_name: str, temperature: float, max_tokens: int, system_prompt: str, debug: bool = False, as_json: bool = False, **kwargs) -> \
+    def create(cls, model_name: str, temperature: float, max_tokens: int, system_prompt: str, debug: bool = False, as_json: bool = False, persist: bool = False, **kwargs) -> \
         Union['OpenAIChat', 'AnthropicChat', 'CohereChat']:
 
         assert model_name in cls._models, f"Model {model_name} not found in model config"
