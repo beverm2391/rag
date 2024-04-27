@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from time import perf_counter
 
 from models.chat import ChatRequest, ChatResponse
@@ -21,12 +21,11 @@ assert (default_temperature := DEFAULTS.get('temperature', None)) is not None, "
 # ! Routes ========================
 @router.get("/")
 def endpoint_chat_root():
-    return {"message": "This is chat()"}
-
+    return JSONResponse(content={"message": "This is chat()"}, status_code=200)
 
 @router.get("/stream")
 def endpoint_chat_stream():
-    return {"message": "This is chat_stream()"}
+    return JSONResponse(content={"message": "This is chat_stream()"}, status_code=200)
 
 def _parse_chat_request(req: ChatRequest) -> tuple:
     # ! Parse the request ========================

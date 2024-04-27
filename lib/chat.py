@@ -141,7 +141,7 @@ class OpenAIChat(ChatABC):
         new_message = {"role": "assistant", "content": ""}
 
         for chunk in res_stream:
-            if self.debug: print(f"event came in from external API at {perf_counter() * 1000:0.2f}ms")
+            # if self.debug: print(f"event came in from external API at {perf_counter() * 1000:0.2f}ms")
             if chunk.choices[0].delta:
                 if content := chunk.choices[0].delta.content:
                     new_message["content"] += content
@@ -227,7 +227,7 @@ class AnthropicChat(ChatABC):
             new_message = {"role": "assistant", "content": ""}
             
             for event in res_stream:
-                if self.debug: print(f"event came in from external API at {perf_counter() * 1000:0.2f}ms")
+                # if self.debug: print(f"event came in from external API at {perf_counter() * 1000:0.2f}ms")
                 if event.type == "mesage_start":
                     pass
                 elif event.type == "content_block_start":
@@ -328,7 +328,7 @@ class CohereChat(ChatABC):
         new_message = {"role": "CHATBOT", "message": ""}
 
         for event in res_stream:
-            if self.debug: print(f"event came in from external API at {perf_counter() * 1000:0.2f}ms")
+            # if self.debug: print(f"event came in from external API at {perf_counter() * 1000:0.2f}ms")
             if event.event_type == "stream_start":
                 pass
             elif event.event_type == "search-queries-generation":
@@ -385,6 +385,9 @@ class Chat:
         self.debug = debug
         self.persist = False
         self.kwargs = kwargs
+
+    @staticmethod
+    def get_model_config(): return MODELS
 
     @classmethod
     def create(cls, model_name: str, temperature: float, max_tokens: int, system_prompt: str, debug: bool = False, as_json: bool = False, persist: bool = False, **kwargs) -> \

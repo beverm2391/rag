@@ -1,6 +1,7 @@
 MODELS = {
     # ? DOCS: https://platform.openai.com/docs/models
     "gpt-3.5-turbo": {
+        "name": "gpt-3.5-turbo",
         "model_var": "gpt-3.5-turbo",
         "org": "openai",
         "context_window": 16385,

@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from fastapi import Depends
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from middleware import AuthMiddleWare
@@ -18,7 +18,7 @@ from server.config import logger
 # NOTSET = 0
 
 # ! Import the routes ========================
-from routes import example, chat
+from routes import example, chat, models
 
 # ! Create the FastAPI app ========================
 app = FastAPI()
@@ -47,6 +47,7 @@ logger.debug("CORS middleware added")
 # ? https://stackoverflow.com/questions/59965872/how-to-solve-no-attribute-routes-in-fastapi
 app.include_router(example.router, prefix="/example", tags=["example"])
 app.include_router(chat.router, prefix="/chat", tags=["chat"])
+app.include_router(models.router, prefix="/models", tags=["models"])
 
 # ! START ROUTES =============================
 
@@ -55,8 +56,8 @@ app.include_router(chat.router, prefix="/chat", tags=["chat"])
 
 @app.get("/")
 async def endpoint_root():
-    return {"message": "Hello World!"}
+    return JSONResponse(content={"message": "Hello World!"}, status_code=200)
 
 @app.get("/test")
 async def endpoint_test():
-    return {"message": "Test successful!"}
+    return JSONResponse(content={"message": "Test successful!"}, status_code=200)
