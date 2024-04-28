@@ -37,7 +37,6 @@ class ChatABC(ABC):
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.system_prompt = system_prompt
-        self.messages = []
         self.debug = debug
         self.as_json = as_json
         self.persist = persist
@@ -84,7 +83,7 @@ class OpenAIChat(ChatABC):
     _api_key = OPENAI_API_KEY
 
     def __init__(
-            self, model_name: str, temperature: float, max_tokens: int, system_prompt: str, 
+            self, model_name: str, temperature: float, max_tokens: int, system_prompt: str, messages: List[Dict],
             debug: bool = False, model_var: str = None, context_window: int = 0, as_json: bool = False, persist=False
         ):
         super().__init__(model_name)
@@ -95,13 +94,11 @@ class OpenAIChat(ChatABC):
         self.model_var = model_var
         self.context_window = context_window
         self.as_json = as_json
-        self.persist = persist
-
-        self.messages = [
-            {"role": "system", "content": system_prompt},
-        ]
-
+        self.persist = messages or persist # we always persist if messages are passed
         self.debug = debug
+
+        # if no messages are passed, reset messages list with system prompt
+        if not messages: self.messages = [{"role": "system", "content": system_prompt}]
         
     def _init_client(self):
         self.client = OpenAI(api_key=OPENAI_API_KEY)
@@ -158,8 +155,9 @@ class OpenAIChat(ChatABC):
                     },
                 }
                 yield json.dumps(dict_) if self.as_json else dict_
-        
-        yield "event: end\ndata: \n\n"  # Signal the end of the stream
+
+        # yield "event: end\ndata: \n\n"  # Signal the end of the stream
+        # TODO delete this??
 
 
 
@@ -169,8 +167,8 @@ class AnthropicChat(ChatABC):
     _api_key = ANTHROPIC_API_KEY
 
     def __init__(
-            self, model_name: str, temperature: float, max_tokens: int, system_prompt: str, debug: bool = False,
-            model_var: str = None, context_window: int = 0, as_json: bool = False, persist=False
+            self, model_name: str, temperature: float, max_tokens: int, system_prompt: str, messages: List[Dict],
+            debug: bool = False, model_var: str = None, context_window: int = 0, as_json: bool = False, persist=False
         ):
         super().__init__(model_name)
         self._init_client()
@@ -262,8 +260,9 @@ class CohereChat(ChatABC):
     _api_key = COHERE_API_KEY
 
     def __init__(
-            self, model_name: str, temperature: float, max_tokens: int, system_prompt: str, debug: bool = False,
-            model_var: str = None, context_window: int = 0, web_search: bool = False, citations: bool = False, as_json: bool = False, persist=False
+            self, model_name: str, temperature: float, max_tokens: int, system_prompt: str, messages: List[Dict],
+            debug: bool = False, model_var: str = None, context_window: int = 0, web_search: bool = False,
+            citations: bool = False, as_json: bool = False, persist=False
         ):
         super().__init__(model_name)
         self._init_client()
@@ -390,8 +389,11 @@ class Chat:
     def get_model_config(): return MODELS
 
     @classmethod
-    def create(cls, model_name: str, temperature: float, max_tokens: int, system_prompt: str, debug: bool = False, as_json: bool = False, persist: bool = False, **kwargs) -> \
-        Union['OpenAIChat', 'AnthropicChat', 'CohereChat']:
+    def create(
+        cls,
+        model_name: str, temperature: float, max_tokens: int, system_prompt: str,
+        messages: List[Dict] = None, debug: bool = False, as_json: bool = False, persist: bool = False, **kwargs
+        ) -> Union['OpenAIChat', 'AnthropicChat', 'CohereChat']:
 
         assert model_name in cls._models, f"Model {model_name} not found in model config"
         model = cls._models[model_name]
@@ -404,21 +406,24 @@ class Chat:
         assert context_window is not None, f"Context Window missing for {model_name} in model config"
         assert context_window >= max_tokens, f"Context window {context_window} must be greater than max tokens {max_tokens}"
 
-        # if debug:
-        #     print(f"Model_name: {model_name}")
-        #     print(f"Model Var: {model_var}")
-        #     print(f"Org: {org}")
-        #     print(f"Context Window: {context_window}")
-
         if org == "openai":
             if debug: print(f"Creating {model_name} chat instance.")
-            instance = OpenAIChat(model_name, temperature, max_tokens, system_prompt, model_var=model_var, context_window=context_window, debug=debug, as_json=as_json, **kwargs)
+            instance: OpenAIChat = OpenAIChat(
+                model_name, temperature, max_tokens, system_prompt, messages,
+                model_var=model_var, context_window=context_window, debug=debug, as_json=as_json, persist=persist, **kwargs
+            )
         elif org == "anthropic":
             if debug: print(f"Creating {model_name} chat instance.")
-            instance: AnthropicChat = AnthropicChat(model_name, temperature, max_tokens, system_prompt, model_var=model_var, context_window=context_window, debug=debug, as_json=as_json, **kwargs)
+            instance: AnthropicChat = AnthropicChat(
+                model_name, temperature, max_tokens, system_prompt, messages,
+                model_var=model_var, context_window=context_window, debug=debug, as_json=as_json, persist=persist, **kwargs
+            )
         elif org == "cohere":
             if debug: print(f"Creating {model_name} chat instance.")
-            instance: CohereChat = CohereChat(model_name, temperature, max_tokens, system_prompt, model_var=model_var, context_window=context_window, debug=debug, as_json=as_json, **kwargs)
+            instance: CohereChat = CohereChat(
+                model_name, temperature, max_tokens, system_prompt, messages,
+                model_var=model_var, context_window=context_window, debug=debug, as_json=as_json, persist=persist, **kwargs
+            )
         else:
             raise ValueError(f"Model {model_name} not supported")
 

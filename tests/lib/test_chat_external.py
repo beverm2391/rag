@@ -21,7 +21,7 @@ def example_prompts(): return "What is the meaning of life?", "Why is the sky bl
 def test_chat_openai(example_args, example_prompts):
     example_prompt_1, example_prompt_2 = example_prompts
 
-    chat = Chat.create("gpt-3.5-turbo", *example_args)
+    chat = Chat.create("gpt-3.5-turbo", *example_args, persist=True, debug=True) # persist true because we check number of messages later
     res = chat.chat(example_prompt_1)
     text = res['data']['text']
 

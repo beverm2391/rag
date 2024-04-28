@@ -67,7 +67,10 @@ def endpoint_chat_stream_post(req: ChatRequest) -> StreamingResponse:
     messages, model, max_tokens, temperature, system_prompt = _parse_chat_request(req)
 
     # Create the chat object ========================
-    chat = Chat.create(model, temperature, max_tokens, system_prompt, debug=debug_bool)
+    chat = Chat.create(
+        model, temperature, max_tokens, system_prompt,
+        messages=messages[:-1], # ? Exclude the last message from the prompt because we pass it as text 
+        debug=debug_bool)
 
     # Get the last message as the prompt, and create a stream 
     prompt = messages[-1]['content']
