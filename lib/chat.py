@@ -1,10 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import Generator, Dict, List, Type, Union
+from typing import Generator, Dict, List, Type, Union, Literal, Callable, Optional
+from pydantic import BaseModel
 from openai import OpenAI
 from anthropic import Anthropic
 import cohere
-import instructor
-import functools
 import json
 from time import perf_counter
 
@@ -25,6 +24,9 @@ env = load_env()
 OPENAI_API_KEY = env.get("OPENAI_API_KEY", None)
 ANTHROPIC_API_KEY = env.get("ANTHROPIC_API_KEY", None)
 COHERE_API_KEY = env.get("COHERE_API_KEY", None)
+
+
+# ! Chat Abstract Class ===============================
 
 class ChatABC(ABC):
     """Abstract base class for chat services."""
@@ -76,6 +78,9 @@ class ChatABC(ABC):
 
     def __repr__(self):
         return f"{self.__class__.__name__}(model={self.model_name}, temperature={self.temperature}, max_tokens={self.max_tokens}, system_prompt={self.system_prompt if len(self.system_prompt) < 20 else self.system_prompt[:20] + '...'}, debug={self.debug})"
+
+
+# ! Service Specific Chat Implementations ===============================
 
 class OpenAIChat(ChatABC):
     """Chat with OpenAI"""
@@ -158,7 +163,6 @@ class OpenAIChat(ChatABC):
 
         # yield "event: end\ndata: \n\n"  # Signal the end of the stream
         # TODO delete this??
-
 
 
 class AnthropicChat(ChatABC):
@@ -371,19 +375,53 @@ class InstructorAnthropicChat(ChatABC):
     pass
 
 
+# ! Message Converter Schemas ========================
+# ? These models are used to validate the messages before and after conversion 
+
+class UniveralMessage(BaseModel):
+    role: Literal['system', 'user', 'assistant']
+    content: str
+
+class OpenAIMessage(BaseModel):
+    role: Literal['system', 'user', 'assistant']
+    content: str
+
+class AnthropicMessage(BaseModel):
+    role: Literal['system', 'user', 'assistant'] # ! even though Anthropic doesnt use a system message, I am including it here for consistency as it will be handled much later, right before the API call
+    content: str
+
+class CohereMessage(BaseModel):
+    role: Literal['SYSTEM', 'USER', 'CHATBOT'] 
+    message: str
+
+class UniversalMessages(BaseModel):
+    messages: List[UniveralMessage]\
+    
+    def to_messages(self): return [message.model_dump() for message in self.messages]
+
+class OpenAIMessages(BaseModel):
+    messages: List[OpenAIMessage]
+
+    def to_messages(self): return [message.model_dump() for message in self.messages]
+
+class AnthropicMessages(BaseModel):
+    messages: List[AnthropicMessage]
+
+    def to_messages(self): return [message.model_dump() for message in self.messages]
+
+class CohereMessages(BaseModel):
+    messages: List[CohereMessage]
+
+    def to_messages(self): return [message.model_dump() for message in self.messages]
+
+# The typehint for all possible message types
+MessageTypes = Union[OpenAIMessages, AnthropicMessages, CohereMessages]
+
+# ! Chat Factory/Static Class ========================
+# ? This class is used to create chat instances and convert messages between different formats
+
 class Chat:
     _models = MODELS
-
-    def __init__(self, model_name: str, temperature: float, max_tokens: int, system_prompt: str, model_var: str, context_window: int, debug: bool = False, persist: bool = False, **kwargs):
-        self.model_name = model_name
-        self.temperature = temperature
-        self.max_tokens = max_tokens
-        self.system_prompt = system_prompt
-        self.model_var = model_var
-        self.context_window = context_window
-        self.debug = debug
-        self.persist = False
-        self.kwargs = kwargs
 
     @staticmethod
     def get_model_config(): return MODELS
@@ -428,3 +466,56 @@ class Chat:
             raise ValueError(f"Model {model_name} not supported")
 
         return instance
+    
+    # ? Message Conversion ========================
+
+    def universal_validator(func: Callable) -> Callable:
+        def wrapper(messages: UniversalMessages) -> MessageTypes:
+            try:
+                validated = UniversalMessages(messages=[UniveralMessage(**message) for message in messages])
+            except Exception as e:
+                print(e)
+                raise ValueError(f'Messages passed to {func.__name__} are not in the correct format, as defined by the `UniversalMessages` model')
+            return func(messages)
+        return wrapper
+
+
+    @staticmethod
+    @universal_validator
+    def convert_messages_to_openai(messages: UniversalMessages) -> OpenAIMessages:
+        try:
+            return OpenAIMessages(messages=[OpenAIMessage(**message) for message in messages]).to_messages()
+        except Exception as e:
+            print(e)
+            raise ValueError('Failed to convert messages to OpenAI format')
+
+    @staticmethod
+    @universal_validator
+    def convert_messages_to_anthropic(messages: UniversalMessages) -> AnthropicMessages:
+        # ! Anthropic does not use a system message, but we leave that in for now for compatibility/simplicity
+        # ! We will remove the system message later (at the very last point within the funciton that calls the API)
+        try:
+            return AnthropicMessages(messages=[AnthropicMessage(**message) for message in messages]).to_messages()
+        except Exception as e:
+            print(e)
+            raise ValueError('Failed to convert messages to Anthropic format')
+
+    @staticmethod
+    @universal_validator
+    def convert_messages_to_cohere(messages: UniversalMessages) -> CohereMessages:
+        new_messages = []
+        for message in messages:
+
+            # convert the role to the correct format
+            if message['role'] == 'system': role = 'SYSTEM'
+            elif message['role'] == 'user': role = 'USER'
+            elif message['role'] == 'assistant': role = 'CHATBOT'
+            else: raise ValueError(f'Unsupported input role: {message["role"]}')
+
+            # create a new message with keys 'role' and 'message' (instead of 'content')
+            new_messages.append({'role': role, 'message': message['content']})
+        try:
+            return CohereMessages(messages=[CohereMessage(**message) for message in new_messages]).to_messages()
+        except Exception as e:
+            print(e)
+            raise ValueError('Failed to convert messages to Cohere format')
