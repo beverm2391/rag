@@ -56,7 +56,11 @@ This is a work in progress. Right now I'm finishing up the core abstractions. Ev
 
 
 ## TODO
-- [ ] integrate LlaMA 3 70B and 400B when it drops!!
+- [ ] implement the message logic in the `chat` functions
+  - [ ] get all tests passing
+  - [ ] merge into main
+- [ ] integrate LlaMA 3 70B and 400B when it drops!! (with GROQ)
+  - [ ] write in the docs the process for integraging a new model (add the specific class, add to `Chat` factory class, add message convert messages, add to model config)
 - [ ] change the default RAG to persist=False
 - [ ] add logging config for lib
 - [ ] add usage printing per request/response in Debug mode
@@ -66,3 +70,5 @@ This is a work in progress. Right now I'm finishing up the core abstractions. Ev
 - [ ] build and text the ability to generate queries that include the best location/db to search for
 - [ ] Add tool calls for openai and Anthropic
 - [ ] add Instructor support for Chat models
+- [ ] add rate limits to model config
+- [ ] make model config into a data class, add embedding models and rerank models
