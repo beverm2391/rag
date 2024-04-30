@@ -57,9 +57,11 @@ This is a work in progress. Right now I'm finishing up the core abstractions. Ev
 - [X] implement the message logic in the `chat` functions
   - [X] get all tests passing
   - [X] merge into main
+- [X] added more robust error handling to the chat routes
+- [X] added message validation rules for order
+- [x] add usage/cost monitoring per request
 
 ## TODO
-- [ ] add usage/cost monitoring per instance 
 - [ ] integrate LlaMA 3 70B and 400B when it drops!! (with GROQ)
   - [ ] write in the docs the process for integraging a new model (add the specific class, add to `Chat` factory class, add message convert messages, add to model config)
 - [ ] change the default RAG to persist=False

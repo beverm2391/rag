@@ -51,18 +51,27 @@ def endpoint_chat_root_post(req: ChatRequest) -> ChatResponse:
     messages, model, max_tokens, temperature, system_prompt = _parse_chat_request(req)
 
     prompt = messages[-1]['content']
-    rest = messages[:-1] if len(messages) > 1 else []
+    rest = messages[:-1] if len(messages) > 1 else None
 
     # Create the chat object ========================
-    chat = Chat.create(
-        model, temperature, max_tokens,
-        system_prompt=system_prompt, messages=rest, debug=debug_bool
-    )
+    # ! The robust error handling here prevents the server from crashing if an error occurs
+    try:
+        chat = Chat.create(
+            model, temperature, max_tokens,
+            system_prompt=system_prompt, messages=rest, debug=debug_bool
+        )
+    except Exception as e:
+        logger.error(f"Error in Chat.create(): {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
     
     # Get the last message as the prompt
     prompt = messages[-1]['content']
-
-    return chat.chat(prompt)
+    
+    try:        
+        return chat.chat(prompt)
+    except Exception as e:
+        logger.error(f"Error in chat(): {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
 # Streaming chat endpoint ========================
@@ -73,16 +82,25 @@ def endpoint_chat_stream_post(req: ChatRequest) -> StreamingResponse:
     messages, model, max_tokens, temperature, system_prompt = _parse_chat_request(req)
 
     prompt = messages[-1]['content']
-    rest = messages[:-1] if len(messages) > 1 else []
+    rest = messages[:-1] if len(messages) > 1 else None
 
     # Create the chat object ========================
-    chat = Chat.create(
-        model, temperature, max_tokens,
-        system_prompt=system_prompt, messages=rest, debug=debug_bool
-    )
+    # ! The robust error handling here prevents the server from crashing if an error occurs
+    try:
+        chat = Chat.create(
+            model, temperature, max_tokens,
+            system_prompt=system_prompt, messages=rest, debug=debug_bool
+        )
+    except Exception as e:
+        logger.error(f"Error in Chat.create(): {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
-    stream = stream_dicts_as_json(chat.chat_stream(prompt)) # ? Convert the dict generator to a stream of JSON strings
-    return StreamingResponse(stream, media_type="text/event-stream") 
+    try:
+        stream = stream_dicts_as_json(chat.chat_stream(prompt)) # ? Convert the dict generator to a stream of JSON strings
+        return StreamingResponse(stream, media_type="text/event-stream") 
+    except Exception as e:
+        logger.error(f"Error in chat_stream(): {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 @router.post("/test")
 def endpoint_chat_test(req: ChatRequest) -> StreamingResponse:

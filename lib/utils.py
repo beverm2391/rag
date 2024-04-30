@@ -145,9 +145,10 @@ def calculate_cost(model: str, input_tokens: int, output_tokens: int):
     price_obj = MODELS[model].get('price_per_million_tokens', None)
     if not price_obj: return None
     
-    input_tokens_cost = input_tokens * price_obj['input']
-    output_tokens_cost = output_tokens * price_obj['output']
-
+    input_tokens_cost = input_tokens * price_obj['input'] / 1000000
+    output_tokens_cost = output_tokens * price_obj['output'] / 1000000
+    
+    # ? I'm intentionally keeping precision (not rounding) so that it's precise for the frontend/user
     return {
         "input_tokens_cost": input_tokens_cost,
         "output_tokens_cost": output_tokens_cost,

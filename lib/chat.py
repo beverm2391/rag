@@ -7,8 +7,8 @@ import cohere
 import json
 from time import perf_counter
 
-from lib.utils import load_env, calculate_cost, count_tokens
-from lib.config import logger
+from lib.utils import calculate_cost, count_tokens
+from lib.config import logger, load_env
 from lib.model_config import MODELS, DEFAULTS
 
 # TODO: The plan here is to have support for OpenAI, Anthropic, Cohere, and so on in one unified API
@@ -74,16 +74,28 @@ MessageTypes = Union[OpenAIMessages, AnthropicMessages, CohereMessages]
 
 # ! Message Conversion ========================
 
+def must_alternate_roles(messages: List[Dict]) -> bool:
+    print("sanity")
+    roles = [x['role'] for x in messages]
+    if not all(roles[i] != roles[i+1] for i in range(len(roles)-1)):
+        raise ValueError('Messages must alternate between user and assistant')
+    
+def last_cant_be_user(messages: List[Dict]) -> bool:
+    # ? This happens because we treat the user message as the prompt in the `Chat` classes. So the last messages before the final user prompt cannot be another user message
+    if messages[-1]['role'] == 'user':
+        raise ValueError(f'The last message must be from the assistant, is from {messages[-1]["role"]}')
+
 class MessageConverter:
 
     # This takes a RAW form of UniversalMessages and makes sure they are in the correct format
     def _universal_validator(func: Callable) -> Callable:
         def wrapper(messages: List[Dict]) -> MessageTypes:
             try:
+                must_alternate_roles(messages) # Messages must alternate between user and assistant (i.e. no two roles in a row)
+                last_cant_be_user(messages) # Last message cant be from the user, because when we add the prompt message (user) it will violate the alternating rule
                 validated = UniversalMessages(messages=[UniveralMessage(**message) for message in messages])
             except Exception as e:
-                print(e)
-                raise ValueError(f'Messages passed to {func.__name__} are not in the correct format, as defined by the `UniversalMessages` model')
+                raise ValueError(f'Messages passed to {func.__name__} are not in the correct format, as defined by the `UniversalMessages` model. Detailed error: {e}')
             return func(messages)
         return wrapper
 
@@ -313,6 +325,8 @@ class AnthropicChat(ChatABC):
         if not system_prompt: self.system_prompt = self._defaults['system_prompt'] # if no system prompt - reset it to default
         if not messages: self.messages = [] # if no messages - reset messages list to default
         else:
+            logger.debug(f"Messages passed: {messages}")
+
             anthropic_messages: AnthropicMessages = MessageConverter.to_anthropic(messages) # convert messages to (almost) Anthropic format (excluding the system message)
             messages: List[Dict] = anthropic_messages.to_messages() # now set messages list to converted messages back in dict format
 
@@ -323,6 +337,7 @@ class AnthropicChat(ChatABC):
                     self.system_prompt = message['content'] # set system prompt to the system message
                     messages.remove(message)
 
+            logger.debug(f"Messages converted: {messages}")
             # ? now set messages list to passed messages
             self.messages = messages # now set messages list to passed messages
 
@@ -339,16 +354,32 @@ class AnthropicChat(ChatABC):
         )
         response_text = res.content[0].text
         self.messages.append({"role": res.role, "content": response_text})
+
+        input_tokens = res.usage.input_tokens
+        output_tokens = res.usage.output_tokens
+
+        tokens_obj = {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "total_tokens": input_tokens + output_tokens
+        }
+        cost_obj = calculate_cost(self.model_name, input_tokens, output_tokens)
+
         return {
             "type": "object",
             "data": {
-                "text": response_text ,
+                "text": response_text,
+                "usage": tokens_obj,
+                "cost" : cost_obj if cost_obj else "Cost not available for this model."
             }
         }
 
     # ? DOCS: https://docs.anthropic.com/claude/reference/messages-streaming
     def chat_stream(self, text: str) -> Generator[str, None, None]:
         self.messages.append({"role": "user", "content": text})
+
+        logger.debug(f"Messages in chat after prompt appended: {self.messages}")
+
         with self.client.messages.stream (
             model=self.model_var,
             messages=self.messages,
@@ -357,9 +388,10 @@ class AnthropicChat(ChatABC):
         ) as res_stream:
             
             new_message = {"role": "assistant", "content": ""}
+            
             for event in res_stream:
-                if event.type == "mesage_start":
-                    pass
+                if event.type == "message_start":
+                    input_tokens = event.message.usage.input_tokens
                 elif event.type == "content_block_start":
                     text = event.content_block.text
                     new_message["content"] += text
@@ -374,12 +406,22 @@ class AnthropicChat(ChatABC):
                     pass
                 elif event.type == "message_delta":
                     # data: {"type": "message_delta", "delta": {"stop_reason": "end_turn", "stop_sequence":null, "usage":{"output_tokens": 15}}}
-                    pass
+                    output_tokens = event.usage.output_tokens
                 elif event.type == "message_stop":
+                    
+                    tokens_obj = {
+                        "input_tokens": input_tokens,
+                        "output_tokens": output_tokens,
+                        "total_tokens": input_tokens + output_tokens
+                    }
+                    cost_obj = calculate_cost(self.model_name, input_tokens, output_tokens)
+
                     dict_ = {
                         "type": "object",
                         "data": {
                             "text": new_message["content"],
+                            "usage": tokens_obj,
+                            "cost" : cost_obj if cost_obj else "Cost not available for this model."
                         },
                     }
                     yield dict_
@@ -428,6 +470,20 @@ class CohereChat(ChatABC):
         self.messages.append({"role": "USER", "message": text}) # append after because cohere takes separate chat history and query
         self.messages.append({"role": "CHATBOT", "message": res.text})
 
+        logger.debug(f"cohere res: {res}")
+        logger.debug(f"res type: {type(res)}")
+
+        input_tokens = res.meta['billed_units']['input_tokens']
+        output_tokens = res.meta['billed_units']['output_tokens']
+
+        tokens_obj = {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "total_tokens": input_tokens + output_tokens
+        }
+
+        cost_obj = calculate_cost(self.model_name, input_tokens, output_tokens)
+
         return {
             "type": "object",
             "data": {
@@ -436,6 +492,8 @@ class CohereChat(ChatABC):
                 "search_results": res.search_results,
                 "documents": res.documents,
                 "search_queries": res.search_queries,
+                "usage": tokens_obj,
+                "cost" : cost_obj if cost_obj else "Cost not available for this model."
             },
         }
 
@@ -475,6 +533,18 @@ class CohereChat(ChatABC):
                 yield dict_
             elif event.event_type == "stream-end":
                 self.messages.append(new_message)
+
+                input_tokens = event.response.meta['billed_units']['input_tokens']
+                output_tokens = event.response.meta['billed_units']['output_tokens']
+
+                tokens_obj = {
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "total_tokens": input_tokens + output_tokens
+                }
+
+                cost_obj = calculate_cost(self.model_name, input_tokens, output_tokens)
+
                 dict_ = {
                     "type": "object",
                     "data": {
@@ -487,6 +557,8 @@ class CohereChat(ChatABC):
                         "is_search_required": event.response.is_search_required,
                         "meta" : event.response.meta,
                         "chat_history": [{"role" : m['role'], "message": m['message']} for m in self.messages],
+                        "usage": tokens_obj,
+                        "cost" : cost_obj if cost_obj else "Cost not available for this model."
                     },
                 }
                 yield dict_
