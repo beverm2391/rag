@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from server.config import logger
-from lib.utils import load_env
+from lib.config import load_env
 
 env = load_env(['X-API-KEY'])
 

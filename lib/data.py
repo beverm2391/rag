@@ -11,7 +11,7 @@ from time import perf_counter
 import nest_asyncio
 nest_asyncio.apply()
 
-from lib.utils import load_env
+from lib.config import load_env
 from lib.generators import QueryGeneratorAsync
 from lib.models import Queries
 from lib.model_config import DEFAULTS

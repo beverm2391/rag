@@ -50,8 +50,14 @@ def endpoint_chat_root_post(req: ChatRequest) -> ChatResponse:
     # Parse the request ========================
     messages, model, max_tokens, temperature, system_prompt = _parse_chat_request(req)
 
+    prompt = messages[-1]['content']
+    rest = messages[:-1] if len(messages) > 1 else []
+
     # Create the chat object ========================
-    chat = Chat.create(model, temperature, max_tokens, system_prompt, debug=debug_bool)
+    chat = Chat.create(
+        model, temperature, max_tokens,
+        system_prompt=system_prompt, messages=rest, debug=debug_bool
+    )
     
     # Get the last message as the prompt
     prompt = messages[-1]['content']
@@ -66,14 +72,15 @@ def endpoint_chat_stream_post(req: ChatRequest) -> StreamingResponse:
     # Parse the request ========================
     messages, model, max_tokens, temperature, system_prompt = _parse_chat_request(req)
 
+    prompt = messages[-1]['content']
+    rest = messages[:-1] if len(messages) > 1 else []
+
     # Create the chat object ========================
     chat = Chat.create(
-        model, temperature, max_tokens, system_prompt,
-        messages=messages[:-1], # ? Exclude the last message from the prompt because we pass it as text 
-        debug=debug_bool)
+        model, temperature, max_tokens,
+        system_prompt=system_prompt, messages=rest, debug=debug_bool
+    )
 
-    # Get the last message as the prompt, and create a stream 
-    prompt = messages[-1]['content']
     stream = stream_dicts_as_json(chat.chat_stream(prompt)) # ? Convert the dict generator to a stream of JSON strings
     return StreamingResponse(stream, media_type="text/event-stream") 
 

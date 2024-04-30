@@ -1,7 +1,8 @@
 import requests
 import pytest
 
-from lib.utils import load_env, get, post
+from lib.utils import get, post
+from lib.config import load_env
 
 @pytest.fixture
 def messages():

@@ -7,7 +7,7 @@ import cohere
 import json
 from time import perf_counter
 
-from lib.utils import load_env
+from lib.utils import load_env, calculate_cost, count_tokens
 from lib.config import logger
 from lib.model_config import MODELS, DEFAULTS
 
@@ -222,13 +222,27 @@ class OpenAIChat(ChatABC):
             temperature=self.temperature,
             max_tokens=self.max_tokens,
         )
+
         response_text = res.choices[0].message.content
         self.messages.append({"role": "assistant", "content": response_text})  # add assistant message to messages list
-        # TODO - Add support for tool caling, other stuff sent back
+
+        input_tokens = res.usage.prompt_tokens
+        output_tokens = res.usage.completion_tokens
+
+        tokens_obj = {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "total_tokens": input_tokens + output_tokens
+        }
+
+        cost_obj = calculate_cost(self.model_name, input_tokens, output_tokens)
+
         return {
             "type" : "object",
             "data": {
                 "text": response_text,
+                "usage": tokens_obj,
+                "cost" : cost_obj if cost_obj else "Cost not available for this model."
             },
         }
 
@@ -256,10 +270,23 @@ class OpenAIChat(ChatABC):
             # TODO - Add support for tool caling, other stuff sent back 
             if chunk.choices[0].finish_reason:
                 self.messages.append(new_message)
+
+                input_tokens = count_tokens(text, self.model_var)
+                output_tokens = count_tokens(new_message["content"])
+
+                tokens_obj = {
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "total_tokens": input_tokens + output_tokens
+                }
+                cost_obj = calculate_cost(self.model_name, input_tokens, output_tokens)
+                
                 dict_ = {
                     "type": "object",
                     "data": {
                         "text": new_message["content"],
+                        "usage": tokens_obj,
+                        "cost" : cost_obj if cost_obj else "Cost not available for this model."
                     },
                 }
                 yield dict_

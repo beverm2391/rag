@@ -1,6 +1,6 @@
 import requests
 
-from lib.utils import load_env
+from lib.config import load_env
 
 env = load_env(['DEBUG', 'SERVER_DEV_ENPOINT'])
 DEV_ENDPOINT = env['SERVER_DEV_ENPOINT']

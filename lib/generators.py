@@ -10,7 +10,8 @@ from anthropic import Anthropic, AsyncAnthropic
 import nest_asyncio
 nest_asyncio.apply()
 
-from lib.utils import load_env, auto_nest_asyncio
+from lib.config import load_env
+from lib.utils import auto_nest_asyncio
 from lib.model_config import MODELS
 from lib.models import Queries, Query
 

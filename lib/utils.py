@@ -16,20 +16,15 @@ import json
 import requests
 
 from lib.model_config import MODELS
-
-# ! Environment Variables ========================
-def load_env(expected_vars: list = []):
-    env = load_dotenv()
-    assert env, "No .env file found"
-    vars = {}
-    for var in expected_vars:
-        assert os.getenv(var), f"Expected {var} in .env"
-    return os.environ
+from lib.config import logger, load_env
 
 # ! Text Processing ========================
-
 def count_tokens(text: str, model: str = "gpt-4") -> int:
-    encoding = tiktoken.encoding_for_model(model)
+    try:
+        encoding = tiktoken.encoding_for_model(model)
+    except Exception as e:
+        logger.debug(f"Model {model} not found in tiktoken. Defaulting to base model. Error: {e}")
+        encoding = tiktoken.get_encoding("cl100k_base")
     return len(encoding.encode(text)) if text else 0
 
 def pdf_to_text(fpath: str): return''.join([page.extract_text() for page in PdfReader(fpath).pages]).replace('\n', ' ').strip()
@@ -141,3 +136,20 @@ def stream_dicts_as_json(dict_stream):
     for dict_item in dict_stream:
         json_str = json.dumps(dict_item) # Convert the dictionary to a JSON string
         yield f"data: {json_str}\n\n" # Format for SSE protocol and yield
+
+
+# ! Cost Calculation ========================
+
+def calculate_cost(model: str, input_tokens: int, output_tokens: int):
+    if not model in MODELS: raise ValueError(f"Model {model} not found in MODELS")
+    price_obj = MODELS[model].get('price_per_million_tokens', None)
+    if not price_obj: return None
+    
+    input_tokens_cost = input_tokens * price_obj['input']
+    output_tokens_cost = output_tokens * price_obj['output']
+
+    return {
+        "input_tokens_cost": input_tokens_cost,
+        "output_tokens_cost": output_tokens_cost,
+        "total_cost": input_tokens_cost + output_tokens_cost,
+    }

@@ -1,7 +1,7 @@
 import logging
 from logging.handlers import RotatingFileHandler
 
-from lib.utils import load_env
+from lib.config import load_env
 from lib.model_config import DEFAULTS, MODELS
 
 # ! This file is used to store global variables that are used throughout the project
