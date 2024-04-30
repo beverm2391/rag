@@ -1,5 +1,3 @@
-import requests
-
 from lib.chat import Chat
 from lib.data import Index
 from lib.model_config import MODELS, DEFAULTS
@@ -9,7 +7,7 @@ class Rag:
     _models = MODELS
     _defaults = DEFAULTS
 
-    def __init__(self, model_name: str, temperature: float = 0, max_tokens: int = 4096, system_prompt: str = None, instruction: str = None, persist: bool = False, debug: bool = False):
+    def __init__(self, model_name: str, temperature: float = 0, max_tokens: int = 4096, system_prompt: str = None, instruction: str = None, debug: bool = False):
         self.model_name = model_name
         self.debug = debug
         self.index = Index(debug=debug)
@@ -18,8 +16,7 @@ class Rag:
         system_prompt = system_prompt if system_prompt else self._defaults["system_prompt"] # revert to default if not provided
 
         self.instruction = instruction
-        self.persist = persist # default to False for RAG 
-        self._chat = Chat.create(model_name, temperature, max_tokens, system_prompt, debug=debug, persist=persist) # THIS NEEDS TO BE PREFIXED WITH AN UNDERSCORE TO AVOID METHOD CONFLICTS
+        self._chat = Chat.create(model_name, temperature, max_tokens, system_prompt=system_prompt, debug=debug) # THIS NEEDS TO BE PREFIXED WITH AN UNDERSCORE TO AVOID METHOD CONFLICTS
 
     def process_text(self, text: str, chunk_size: int = 1000, overwrite=False) -> Index:
         """Embed text and add to index."""

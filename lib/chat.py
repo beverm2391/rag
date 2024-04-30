@@ -8,7 +8,8 @@ import json
 from time import perf_counter
 
 from lib.utils import load_env
-from lib.model_config import MODELS
+from lib.config import logger
+from lib.model_config import MODELS, DEFAULTS
 
 # TODO: The plan here is to have support for OpenAI, Anthropic, Cohere, and so on in one unified API
 # This is so we can just plug the same code into any of these services and have it work
@@ -74,8 +75,10 @@ MessageTypes = Union[OpenAIMessages, AnthropicMessages, CohereMessages]
 # ! Message Conversion ========================
 
 class MessageConverter:
+
+    # This takes a RAW form of UniversalMessages and makes sure they are in the correct format
     def _universal_validator(func: Callable) -> Callable:
-        def wrapper(messages: UniversalMessages) -> MessageTypes:
+        def wrapper(messages: List[Dict]) -> MessageTypes:
             try:
                 validated = UniversalMessages(messages=[UniveralMessage(**message) for message in messages])
             except Exception as e:
@@ -84,6 +87,7 @@ class MessageConverter:
             return func(messages)
         return wrapper
 
+    # This takes a RAW form of UniversalMessages and converts the to the OpenAIMessages OBJECT format
     @staticmethod
     @_universal_validator
     def to_openai(messages: UniversalMessages) -> OpenAIMessages:
@@ -93,6 +97,7 @@ class MessageConverter:
             print(e)
             raise ValueError('Failed to convert messages to OpenAI format')
 
+    # This takes a RAW form of UniversalMessages and converts the to the AnthropicMessages OBJECT format
     @staticmethod
     @_universal_validator
     def to_anthropic(messages: UniversalMessages) -> AnthropicMessages:
@@ -104,6 +109,7 @@ class MessageConverter:
             print(e)
             raise ValueError('Failed to convert messages to Anthropic format')
 
+    # This takes a RAW form of UniversalMessages and converts the to the CohereMessages OBJECT format
     @staticmethod
     @_universal_validator
     def to_cohere(messages: UniversalMessages) -> CohereMessages:
@@ -128,18 +134,19 @@ class MessageConverter:
 
 class ChatABC(ABC):
     """Abstract base class for chat services."""
+    _models = MODELS
+    _defaults = DEFAULTS
+
     def __init__(
-            self, model_name: str, temperature: float = 0, max_tokens: int = 2048, system_prompt: str = "You are a helpful assistant.",
-            debug: bool = False, as_json: bool = False, persist=False, **kwargs
+            self, model_name: str, temperature: float = 0, max_tokens: int = 2048, system_prompt: str = None,
+            debug: bool = False, **kwargs
         ):
         self.model_name = model_name
         self.model_var = None
         self.temperature = temperature
         self.max_tokens = max_tokens
-        self.system_prompt = system_prompt
+        self.system_prompt = system_prompt if system_prompt else self._defaults["system_prompt"]
         self.debug = debug
-        self.as_json = as_json
-        self.persist = persist
 
     @abstractmethod
     def _init_client(self):
@@ -198,16 +205,14 @@ class OpenAIChat(ChatABC):
         self.context_window = context_window
         self.debug = debug
 
-        if not system_prompt: self.system_prompt = "You are a helpful assistant." # if no system prompt - reset it to default
+        if not system_prompt: self.system_prompt = self._defaults['system_prompt'] # if no system prompt - reset it to default
         if not messages: self.messages = [{"role": "system", "content": self.system_prompt}] # if no messages - reset messages list to default
         else:
             print("messages passed", messages)
             openai_messages: OpenAIMessages = MessageConverter.to_openai(messages) # convert messages to OpenAI format
             self.messages: List[Dict] = openai_messages.to_messages() # now set messages list to converted messages back in dict format
         
-    def _init_client(self):
-        self.client = OpenAI(api_key=OPENAI_API_KEY)
-        if self.debug: print(f"Initialized {self._name} client.")
+    def _init_client(self): self.client = OpenAI(api_key=OPENAI_API_KEY)
 
     def chat(self, text: str) -> str:
         self.messages.append({"role": "user", "content": text}) # add user message to messages list
@@ -278,15 +283,14 @@ class AnthropicChat(ChatABC):
         self.context_window = context_window
         self.debug = debug
 
-        if not system_prompt: self.system_prompt = "You are a helpful assistant." # if no system prompt - reset it to default
-        if not messages: self.messages = [{"role": "system", "content": self.system_prompt}] # if no messages - reset messages list to default
+        if not system_prompt: self.system_prompt = self._defaults['system_prompt'] # if no system prompt - reset it to default
+        if not messages: self.messages = [] # if no messages - reset messages list to default
         else:
             anthropic_messages: AnthropicMessages = MessageConverter.to_anthropic(messages) # convert messages to (almost) Anthropic format (excluding the system message)
             messages: List[Dict] = anthropic_messages.to_messages() # now set messages list to converted messages back in dict format
 
             # ? now, for anthropic, we need to remove the system message if it exists (and then store it in the system_prompt attribute)
             # ? DOCS: https://docs.anthropic.com/claude/docs/system-prompts
-
             for message in messages:
                 if message['role'] == 'system':
                     self.system_prompt = message['content'] # set system prompt to the system message
@@ -295,9 +299,7 @@ class AnthropicChat(ChatABC):
             # ? now set messages list to passed messages
             self.messages = messages # now set messages list to passed messages
 
-    def _init_client(self):
-        self.client = Anthropic(api_key=ANTHROPIC_API_KEY)
-        if self.debug: print(f"Initialized {self._name} client.")
+    def _init_client(self): self.client = Anthropic(api_key=ANTHROPIC_API_KEY)
 
     def chat(self, text: str) -> str:
         self.messages.append({"role": "user", "content": text})
@@ -364,8 +366,8 @@ class CohereChat(ChatABC):
 
     def __init__(
             self, model_name: str, temperature: float, max_tokens: int,
-            messages: Union[CohereMessages, None] = None, system_prompt: str = None,debug: bool = False, model_var: str = None, context_window: int = 0, web_search: bool = False,
-            citations: bool = False, as_json: bool = False, persist=False
+            messages: Union[CohereMessages, None] = None, system_prompt: str = None, debug: bool = False, model_var: str = None, context_window: int = 0,
+            web_search: bool = False, citations: bool = False, as_json: bool = False, persist=False
         ):
         super().__init__(model_name)
         self._init_client()
@@ -376,26 +378,17 @@ class CohereChat(ChatABC):
         self.context_window = context_window
         self.web_search = web_search
         self.citations = citations
-        
-        if not system_prompt: self.system_prompt = "You are a helpful assistant." # if no system prompt - reset it to default
-        if not messages: self.messages = [{"role": "system", "content": self.system_prompt}] # if no messages - reset messages list to default
-        else:
-            openai_messages: OpenAIMessages = MessageConverter.to_cohere(messages) # convert messages to OpenAI format
-            self.messages: List[Dict] = openai_messages.to_messages() # now set messages list to converted messages back in dict format
-        
-
-        self.messages = [
-            {"role": "SYSTEM", "message": system_prompt},
-        ]
-
         self.debug = debug
+
+        if not system_prompt: self.system_prompt = self._defaults['system_prompt'] # if no system prompt - reset it to default
+        if not messages: self.messages = [{"role": "SYSTEM", "message": self.system_prompt}] # if no messages - reset messages list to default
+        else:
+            cohere_messages: OpenAIMessages = MessageConverter.to_cohere(messages) # convert messages to OpenAI format
+            self.messages: List[Dict] = cohere_messages.to_messages() # now set messages list to converted messages back in dict format
         
-    def _init_client(self):
-        self.client = cohere.Client(api_key=COHERE_API_KEY)
-        if self.debug: print(f"Initialized {self._name} client.")
+    def _init_client(self): self.client = cohere.Client(api_key=COHERE_API_KEY)
 
     def chat(self, text: str) -> str:
-        if not self.persist: self.messages = [{"role": "SYSTEM", "message": self.system_prompt}]
         res = self.client.chat(
             model=self.model_var,
             chat_history=self.messages,
@@ -421,7 +414,6 @@ class CohereChat(ChatABC):
 
     # ? DOCS: https://docs.cohere.com/docs/streaming#retrieval-augmented-generation-stream-events
     def chat_stream(self, text: str) -> Generator[str, None, None]:
-        if not self.persist: self.messages = [{"role": "SYSTEM", "message": self.system_prompt}]
         res_stream = self.client.chat_stream(
             model=self.model_var,
             chat_history=self.messages,

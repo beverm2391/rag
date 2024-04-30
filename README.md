@@ -52,19 +52,19 @@ This is a work in progress. Right now I'm finishing up the core abstractions. Ev
 - [X] get the streaming endpoint working
 - [X] expose an all purpose chat endpoint that takes in params and returns a stream (FastAPI)
   
-### Week of 4/10
-
+### Week of 4/30
+- [X] rebuild logging to use one folder in the root dir
+- [X] implement the message logic in the `chat` functions
+  - [X] get all tests passing
+  - [X] merge into main
 
 ## TODO
-- [ ] implement the message logic in the `chat` functions
-  - [ ] get all tests passing
-  - [ ] merge into main
+- [ ] add usage/cost monitoring per instance 
 - [ ] integrate LlaMA 3 70B and 400B when it drops!! (with GROQ)
   - [ ] write in the docs the process for integraging a new model (add the specific class, add to `Chat` factory class, add message convert messages, add to model config)
 - [ ] change the default RAG to persist=False
 - [ ] add logging config for lib
 - [ ] add usage printing per request/response in Debug mode
-- [ ] add usage/cost monitoring per instance 
 - [ ] add [rerank 3](https://twitter.com/aidangomez/status/1778416325628424339?s=42&t=xWkJ8jxhhZSSUcSQM9eZIQ)
 - [ ] check multiple message support for all models (Claude is not working rn)
 - [ ] build and text the ability to generate queries that include the best location/db to search for

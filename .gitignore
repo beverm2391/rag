@@ -6,4 +6,5 @@ __pycache__
 data
 notebooks/ignore
 notebooks/tests
-server/logs
+*/logs
+logs
