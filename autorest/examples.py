@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from collections import namedtuple
 
 
 database_model_example = """class Injury(Base):
@@ -72,14 +72,56 @@ class InjurySchema(BaseModel):
         use_enum_values = True # this is for the Enum values to be used instead of the index
 """
 
-broken_code = """from pydantic import BaseModel
 
-class User(BaseModel):
-    id: UUID
-    name: str
-    email: str
-    is_active: Optional[bool] = True
+database_repositoriy_example = """from api_hub.database import models
+from api_hub.database.repositories.generic import GenericDatabaseRepository
+from sqlalchemy.ext.asyncio import AsyncSession
 
-    def greet(self)
-        return f"Hello, {self.name}!"
+
+class ExposureDatabaseRepository(GenericDatabaseRepository):
+    def __init__(self, session: AsyncSession, *args, **kwargs) -> None:
+        super().__init__(models.Exposure, session, *args, **kwargs)"""
+
+BrokenCodeExamples = namedtuple("BrokenCodeExamples", ['example_1', 'example_2', 'example_3', 'example_4', 'example_5'])
+
+example_1 = """
+def greet(name):
+    print("Hello, " + name
 """
+
+example_2 = """
+def add_numbers(a, b):
+    return a + b
+
+result = add_numbers(5, "10")
+"""
+
+example_3 = """
+class Dog:
+    def __init__(self, name):
+        self.name = name
+
+    def bark(self):
+        print("Woof!")
+
+my_dog = Dog("Buddy")
+my_dog.bark()
+my_dog.wag_tail()
+"""
+
+example_4 = """
+numbers = [1, 2, 3, 4, 5]
+print(numbers[5])
+"""
+
+example_5 = """
+def factorial(n):
+    if n == 1:
+        return 1
+    else:
+        return n * factorial(n - 1)
+
+print(factorial(0))
+"""
+
+broken_code_examples = BrokenCodeExamples(example_1, example_2, example_3, example_4, example_5)

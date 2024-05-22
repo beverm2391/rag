@@ -28,3 +28,9 @@ class GeneratedPydanticModel(BaseModel):
 class RegeneratedCode(BaseModel):
     code: str
     cause_of_error: Optional[str] = None
+
+
+class GeneratedDatabaseRepository(BaseModel):
+    table_name: str
+    imports: str
+    code: str

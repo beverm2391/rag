@@ -3,14 +3,48 @@ import ast
 from typing import List, Tuple
 
 from lib.utils import verbose_validate
-from autorest.models import DatabaseModels, Route, RouteGroup, RouteConfig, RegeneratedCode
-from autorest.generators import CodeRegenerator
+from autorest.models import DatabaseModels, Route, RouteGroup, RouteConfig, RegeneratedCode, GeneratedPydanticModel, GeneratedDatabaseRepository
+from autorest.generators import CodeRegenerator, PydanticModelGenerator, DatabaseRepositoryGenerator
+from collections import namedtuple
+
+# these must be outside of the class!
+globals_ = globals()
+locals_ = locals()
+
+class DynamicOutputValidator:
+    def __init__(self, code: str, retries: int = 2, debug: bool = False):
+        self.code: List[str] = [code]
+        self.retries = retries
+        self.generator = CodeRegenerator(model='gpt-4-turbo')
+        self.debug = debug
+        self.result = namedtuple("Test", ["result", "code"])
+
+    async def validate(self) -> Tuple[bool, str]:
+        for i in range(self.retries):
+            current_best_code = self.code[-1]
+            if self.debug:
+                print(f"Trying code:\n{current_best_code}")
+            try:
+                exec(current_best_code, globals_, locals_)
+                print("Code is valid!")
+                return self.result(True, current_best_code)
+            except Exception as e:
+                print("Code is invalid. Exception: ", e)
+                print(f"Regenerating code... try {i+1} / {self.retries}")
+                prompt = f"This error was thrown by the code below:\n{str(e)}\nCode:\n{current_best_code}"
+                res: List[RegeneratedCode] = await self.generator.generate(prompt)
+                new_best_code = res[0].code
+                self.code.append(new_best_code)
+        return self.result(False, current_best_code)
+
 
 class GenerativeConfig:
-    def __init__(self, root_dir: str = None):
+    def __init__(self, root_dir: str = None, model: str = 'gpt-4-turbo', debug: bool = False):
         self.db_models: DatabaseModels = {}
         self.route_config: RouteConfig = {}
         self.root_dir: str = root_dir
+        self.model: str = model
+        self.debug: bool = debug
 
     def _validate_path(self, path: str):
         if self.root_dir:
@@ -132,64 +166,55 @@ class GenerativeConfig:
     def set_route_config(self, *args, **kwargs):
         self.route_config = self.get_route_config(*args, **kwargs)
 
-    def make_pydantic_models(self, name: str):
+    async def generate_pydantic_model(self, name: str):
+        """Automatically generate Pydantic models based on the database models."""
         self._validate_db_model(name)
-        # TODO do the generation
         db_model_code: str = self.db_models.get(name, None)
         if not db_model_code:
             raise Exception("something went wrong")
 
-        generated_model = ""
-        self.pydantic_model = generated_model
+        generator = PydanticModelGenerator(model=self.model, debug=self.debug) # init the generator
+        generated_pydantic_model: GeneratedPydanticModel = (await generator.generate(db_model_code))[0] # generate the model (coroutine must be in parentheses to index it)
+        imports, code = generated_pydantic_model.imports, generated_pydantic_model.code # extract the imports and code
+        total_code = f"{imports}\n{code}" # combine the imports and code for validation
 
-    def make_db_repo(self, name: str):
+        dynamic_output_validator = DynamicOutputValidator(total_code, debug=self.debug, retries=2) # init the dynamic output validator
+        is_valid, code = await dynamic_output_validator.validate() # dynamically the code
+
+        if is_valid:
+            self.pydantic_model = code
+        else:
+            raise Exception("Could not generate valid code")
+
+    async def generate_db_repo(self, name: str):
+        """Automatically generate a database repository based on the database model."""
         self._validate_db_model(name)
-        # TODO do the generation
-        generated_repo = ""
-        self.db_repo = generated_repo
 
-    def make_route_group(self, name: str):
+        generator = DatabaseRepositoryGenerator(debug=self.debug) # init the generator
+        generated_repo: GeneratedDatabaseRepository = (await generator.generate(name))[0]
+        imports, code = generated_repo.imports, generated_repo.code
+        total_code = f"{imports}\n{code}"
+
+        self.db_repo = total_code
+
+    def generate_route_group(self, name: str):
+        """Automatically generate a route group based on the pydantic model and the database repo."""
         self._validate_db_model(name)
 
         if not self.db_repo:
-            self.make_db_repo(name)
+            self.generate_db_repo(name)
 
         # TODO do the generation
         generated_route_group: RouteGroup = ""
         self.route_group = generated_route_group
 
-    def make_tests(self, name: str):
+    def generate_tests(self, name: str):
+        """Automatically generate tests based on the route group."""
         self._validate_db_model(name)
 
         if not self.route_group:
-            self.make_route_group(name)
+            self.generate_route_group(name)
 
         # TODO do the generation
         generated_tests = ""
         self.tests = generated_tests
-
-
-class DynamicOutputValidator:
-    def __init__(self, code: str, retries: int = 2, debug: bool = False):
-        self.code: List[str] = [code]
-        self.retries = retries
-        self.generator = CodeRegenerator(model='gpt-4-turbo')
-        self.debug = debug
-
-    async def regenerate(self) -> Tuple[bool, str]:
-        for i in range(self.retries):
-            current_best_code = self.code[-1]
-            if self.debug:
-                print(f"Trying code:\n{current_best_code}")
-            try:
-                exec(current_best_code)
-                print("Code is valid!")
-                return (True, current_best_code)
-            except Exception as e:
-                print("Code is invalid. Exception: ", e)
-                print(f"Regenerating code... try {i+1} / {self.retries}")
-                prompt = f"This error was thrown by the code below:\n{str(e)}\nCode:\n{current_best_code}"
-                res: List[RegeneratedCode] = await self.generator.generate(prompt)
-                new_best_code = res[0].code
-                self.code.append(new_best_code)
-        return (False, current_best_code)
