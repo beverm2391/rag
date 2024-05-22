@@ -249,12 +249,12 @@ class OpenAIChat(ChatABC):
 
         cost_obj = calculate_cost(self.model_name, input_tokens, output_tokens)
 
-        return {
+        res = {
             "type" : "object",
             "data": {
                 "text": response_text,
                 "usage": tokens_obj,
-                "cost" : cost_obj if cost_obj else "Cost not available for this model."
+                "cost" : cost_obj if cost_obj else None
             },
         }
 
@@ -298,7 +298,7 @@ class OpenAIChat(ChatABC):
                     "data": {
                         "text": new_message["content"],
                         "usage": tokens_obj,
-                        "cost" : cost_obj if cost_obj else "Cost not available for this model."
+                        "cost" : cost_obj if cost_obj else None
                     },
                 }
                 yield dict_
@@ -370,7 +370,7 @@ class AnthropicChat(ChatABC):
             "data": {
                 "text": response_text,
                 "usage": tokens_obj,
-                "cost" : cost_obj if cost_obj else "Cost not available for this model."
+                "cost" : cost_obj if cost_obj else None
             }
         }
 

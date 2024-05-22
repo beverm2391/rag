@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 import os
-import asyncio
+from pydantic import BaseModel, ValidationError
 from pypdf import PdfReader
 import re
 from pptx import Presentation
@@ -14,6 +14,7 @@ import hashlib
 import uuid
 import json
 import requests
+from typing import Type
 
 from lib.model_config import MODELS
 from lib.config import logger, load_env
@@ -154,3 +155,27 @@ def calculate_cost(model: str, input_tokens: int, output_tokens: int):
         "output_tokens_cost": output_tokens_cost,
         "total_cost": input_tokens_cost + output_tokens_cost,
     }
+
+def verbose_validate(model: Type[BaseModel], data: dict) -> None:
+    try:
+        return model(**data)
+    except ValidationError as e:
+        # error_fields = {err['loc'][0] for err in e.errors()}
+        model_fields = set(model.model_fields.keys())
+        data_fields = set(data.keys())
+
+        missing_in_data = model_fields - data_fields
+        extra_in_data = data_fields - model_fields
+
+        if missing_in_data:
+            print(f"Fields missing in data: {missing_in_data}")
+        if extra_in_data:
+            print(f"Extra fields in data: {extra_in_data}")
+
+        print("Validation errors:")
+        for error in e.errors():
+            loc = " -> ".join(map(str, error["loc"]))
+            msg = error["msg"]
+            print(f"{loc}: {msg}")
+
+        raise e
