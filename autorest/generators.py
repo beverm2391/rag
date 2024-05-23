@@ -1,7 +1,18 @@
 from typing import List, Union
 from lib.generators import GeneratorAsync
-from autorest.models import GeneratedPydanticModel, RegeneratedCode, GeneratedDatabaseRepository
-from autorest.examples import database_model_example, pydantic_model_example, database_repositoriy_example
+from autorest.models import (
+    GeneratedPydanticModel,
+    RegeneratedCode,
+    GeneratedDatabaseRepository,
+    RouteGroup,
+)
+from autorest.examples import (
+    database_model_example,
+    pydantic_model_example,
+    database_repositoriy_example,
+    route_group_example,
+)
+
 
 class PydanticModelGenerator(GeneratorAsync):
     def __init__(self, model: str = None, debug: bool = False):
@@ -10,6 +21,7 @@ class PydanticModelGenerator(GeneratorAsync):
             system_prompt="You are designed to take in user instructons and answher the user's request concisely with only code and nothing but code.",
             model=model,
             debug=debug,
+            max_tokens=4096
         )
 
     async def generate(
@@ -22,6 +34,7 @@ class PydanticModelGenerator(GeneratorAsync):
             Always output valid code and nothing but code.
             You output imports separately from the rest of the code.
             Always follow the example provided in the output if you are unsure of anything.
+            The output model should inlclude every field in the database model.
 
             Formatting Rules:
             - If a field can be missing from the database table without breaking the schema, use the Optional[] type hint in the Pydantic model.
@@ -32,6 +45,7 @@ class PydanticModelGenerator(GeneratorAsync):
             - Import the UUID type as follows 'from uuid import UUID'
             - Import ConfigDict as follows 'from pydantic import ConfigDict'
 
+            Make sure to output the full model with every field from the database model.
             """
             example = f"""
             EXAMPLE DB MODEL (Input)
@@ -62,7 +76,7 @@ class PydanticModelGenerator(GeneratorAsync):
 
         queries = _handle_input(one_or_many_queries)
         return await super().generate(queries, model)
-    
+
 
 class DatabaseRepositoryGenerator(GeneratorAsync):
     def __init__(self, model: str = None, debug: bool = False):
@@ -118,6 +132,57 @@ class DatabaseRepositoryGenerator(GeneratorAsync):
         return await super().generate(queries, model)
 
 
+class RouteGroupGenerator(GeneratorAsync):
+    def __init__(self, model: str = None, debug: bool = False):
+        super().__init__(
+            RouteGroup,
+            system_prompt="You are designed to take in user instructions and answer the user's request concisely with only code and nothing but code.",
+            model=model,
+            debug=debug,
+        )
+
+    async def generate(
+        self, one_or_many_queries: Union[List[str], str], model: str = None
+    ):
+        def _make_prompt(user_instructions: str):
+            instructions = f"""
+            INSTRUCTIONS:
+            Your job is to take in a list of Python functions and output a list of dictionaries containing the function's route, method, and code.
+            Always output valid code and nothing but code.
+
+            Formatting Rules:
+            - The route should be a string.
+            - The method should be a string.
+            - The function should be a string.
+            """
+            example = f"""
+            EXAMPLE QUERY for Exposure (Input)
+            'make CRUD routes for the Exposure model, which inlcudes the following functions:
+            - get multiple, get by id
+            - create, update, delete'
+
+            EXAMPLE ROPUTE GROUP for Exposure (Output)
+
+            {route_group_example}
+            """
+            query = f"{instructions}\n{example}\nUSER INSTRUCTIONS:\n{user_instructions}\nOUTPUT:"
+            return query
+
+        def _handle_input(one_or_many_queries: Union[List[str], str]):
+            """A function to handle the user input and return the list of prompts to be passed to the generator."""
+            if isinstance(one_or_many_queries, str):
+                return [_make_prompt(one_or_many_queries)]
+            elif isinstance(one_or_many_queries, list):
+                return [_make_prompt(query) for query in one_or_many_queries]
+            else:
+                raise ValueError(
+                    f"Expected str or list, got {type(one_or_many_queries)}"
+                )
+
+        queries = _handle_input(one_or_many_queries)
+        return await super().generate(queries, model)
+
+
 class CodeRegenerator(GeneratorAsync):
     def __init__(self, model: str = None, debug: bool = False):
         super().__init__(
@@ -135,6 +200,11 @@ class CodeRegenerator(GeneratorAsync):
             INSTRUCTIONS:
             Your job is to take in invalid code, brainstorm why it didn't work, fix it, and output only the fixed code.
             Always output valid code and nothing but code.
+
+            YOU MUST NOT REMOVE ANY CORE FUNCTIONALITY like:
+            - attributes
+            - number of methods, classes
+            - etc.
 
             STEPS:
             1. Identify the cause of the error.

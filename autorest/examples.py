@@ -82,6 +82,22 @@ class ExposureDatabaseRepository(GenericDatabaseRepository):
     def __init__(self, session: AsyncSession, *args, **kwargs) -> None:
         super().__init__(models.Exposure, session, *args, **kwargs)"""
 
+route_group_example = """{'routes': [{'route': '',
+   'method': 'GET',
+   'function': 'async def get_exposures(\n    page: int = 1,\n    page_size: int = 10,\n    sort: str = None,\n    db: AsyncSession = Depends(get_db_session),\n):\n    repo = ExposureDatabaseRepository(db)\n    items = await repo.filter(\n        page=page, page_size=page_size, sort=desc(sort) if sort else None\n    )\n    return items'},
+  {'route': '/{pk}',
+   'method': 'GET',
+   'function': 'async def get_exposure(\n    pk: uuid.UUID,\n    db: AsyncSession = Depends(get_db_session),\n):\n    repo = ExposureDatabaseRepository(db)\n\n    try:\n        exposure = await repo.get(pk)\n    except Exception as e:\n        logger.error(f"Error getting exposure with id {pk}: {e}")\n        raise HTTPException(\n            status_code=500, detail=f"Error getting exposure with id {pk}"\n        )\n\n    if not exposure:\n        logger.error(f"Exposure with id {pk} not found")\n        raise HTTPException(status_code=404, detail=f"Exposure with id {pk} not found")\n\n    response = ExposureSchema.model_validate(exposure.__dict__)\n\n    return response'},
+  {'route': '',
+   'method': 'POST',
+   'function': 'async def create_exposure(\n    exposure: ExposureSchema, db: AsyncSession = Depends(get_db_session)\n):\n    repo = ExposureDatabaseRepository(db)\n    try:\n        new_exposure = await repo.create(exposure.model_dump())\n    except Exception as e:\n        logger.error(f"Error creating exposure: {e}")\n        raise HTTPException(status_code=500, detail="Error creating exposure")\n\n    # we have to do this because the db has fields that are not in the schema\n    validated = ExposureSchema.model_validate(new_exposure.__dict__)\n\n    return validated'},
+  {'route': '/{pk}',
+   'method': 'PUT',
+   'function': 'async def update_exposure(\n    pk: uuid.UUID,\n    exposure: ExposureSchema,\n    db: AsyncSession = Depends(get_db_session),\n):\n    repo = ExposureDatabaseRepository(db)\n\n    try:\n        updated_exposure = await repo.update(pk, exposure.model_dump())\n    except Exception as e:\n        logger.error(f"Error updating exposure with id {pk}: {e}")\n        raise HTTPException(\n            status_code=500,\n            detail=f"Error updating exposure with id {pk}. Message: {e}",\n        )\n\n    validated = ExposureSchema.model_validate(updated_exposure.__dict__)\n\n    return validated'},
+  {'route': '/{pk}',
+   'method': 'DELETE',
+   'function': 'async def delete_exposure(\n    pk: uuid.UUID,\n    db: AsyncSession = Depends(get_db_session),\n):\n    repo = ExposureDatabaseRepository(db)\n\n    try:\n        await repo.delete(pk)\n    except Exception as e:\n        logger.error(f"Error deleting exposure with id {pk}. Message: {e}")\n        raise HTTPException(\n            status_code=500, detail=f"Error deleting exposure with id {pk}. Message {e}"\n        )\n\n    return JSONResponse(status_code=204, content="Exposure deleted")'}]}"""
+
 BrokenCodeExamples = namedtuple("BrokenCodeExamples", ['example_1', 'example_2', 'example_3', 'example_4', 'example_5'])
 
 example_1 = """

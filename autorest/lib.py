@@ -3,19 +3,33 @@ import ast
 from typing import List, Tuple
 
 from lib.utils import verbose_validate
-from autorest.models import DatabaseModels, Route, RouteGroup, RouteConfig, RegeneratedCode, GeneratedPydanticModel, GeneratedDatabaseRepository
-from autorest.generators import CodeRegenerator, PydanticModelGenerator, DatabaseRepositoryGenerator
+from autorest.models import (
+    DatabaseModels,
+    Route,
+    RouteGroup,
+    RouteConfig,
+    RegeneratedCode,
+    GeneratedPydanticModel,
+    GeneratedDatabaseRepository,
+)
+from autorest.generators import (
+    CodeRegenerator,
+    PydanticModelGenerator,
+    DatabaseRepositoryGenerator,
+    RouteGroupGenerator,
+)
 from collections import namedtuple
 
 # these must be outside of the class!
 globals_ = globals()
 locals_ = locals()
 
+
 class DynamicOutputValidator:
-    def __init__(self, code: str, retries: int = 2, debug: bool = False):
+    def __init__(self, code: str, retries: int = 2, model: str = 'gpt-4-turbo', debug: bool = False):
         self.code: List[str] = [code]
         self.retries = retries
-        self.generator = CodeRegenerator(model='gpt-4-turbo')
+        self.generator = CodeRegenerator(model=model)
         self.debug = debug
         self.result = namedtuple("Test", ["result", "code"])
 
@@ -39,11 +53,10 @@ class DynamicOutputValidator:
 
 
 class GenerativeConfig:
-    def __init__(self, root_dir: str = None, model: str = 'gpt-4-turbo', debug: bool = False):
+    def __init__(self, root_dir: str = None, debug: bool = False):
         self.db_models: DatabaseModels = {}
         self.route_config: RouteConfig = {}
         self.root_dir: str = root_dir
-        self.model: str = model
         self.debug: bool = debug
 
     def _validate_path(self, path: str):
@@ -53,14 +66,6 @@ class GenerativeConfig:
         if not os.path.exists(path):
             raise FileNotFoundError(f"File not found: {path}")
         return path
-    
-    def _validate_db_model(self, name: str):
-        if not self.db_models:
-            self.set_db_models()
-        
-        if name.lower() not in [k.lower() for k in self.db_models.keys()]:
-            raise Exception(f"name {name} not found in db models")
-    
 
     def get_db_models(self, db_models_path: str) -> dict:
         """
@@ -151,7 +156,10 @@ class GenerativeConfig:
         return verbose_validate(RouteGroup, rg)
 
     def get_route_config(self, paths: List[str]):
+        if not isinstance(paths, list):
+            raise TypeError("paths must be a list of strings to each route file.")
         paths = [self._validate_path(path) for path in paths]
+        print(paths)
         route_config = {
             (basename := os.path.basename(path).split(".")[0]): self.get_route_group(
                 path
@@ -160,61 +168,102 @@ class GenerativeConfig:
         }
         return verbose_validate(RouteConfig, route_config)
 
-    def set_db_models(self, *args, **kwargs):
-        self.db_models = self.get_db_models(*args, **kwargs)
+    def set_db_models(self, path: str):
+        self.db_models = self.get_db_models(path)
 
-    def set_route_config(self, *args, **kwargs):
-        self.route_config = self.get_route_config(*args, **kwargs)
+    def set_route_group(self, path: str):
+        self.route_group = self.get_route_group(path)
 
-    async def generate_pydantic_model(self, name: str):
+    def set_route_config(self, paths: List[str]):
+        self.route_config = self.get_route_config(paths)
+
+
+class AutoRest:
+    def __init__(
+        self,
+        config: GenerativeConfig,
+        table: str,
+        model: str = "gpt-4-turbo",
+        debug: bool = False,
+    ):
+        self.config: GenerativeConfig = self._init_config(config)
+        self.table = table
+        self.pydantic_model: GeneratedPydanticModel = None
+        self.db_repo: GeneratedDatabaseRepository = None
+        self.route_group: RouteGroup = None
+        self.tests = None
+        self.model: str = model
+        self.debug: bool = debug
+
+    def _init_config(self, config: GenerativeConfig):
+        if not isinstance(config, GenerativeConfig):
+            raise TypeError("config must be an instance of GenerativeConfig")
+        if not config.db_models:
+            raise Exception(
+                "No database models found. Run `set_db_models(path)` first."
+            )
+        # if not config.route_config:
+        #     raise Exception("No route configurations found. Run `set_route_config(paths)` first.")
+        return config
+
+    async def generate_pydantic_model(self):
         """Automatically generate Pydantic models based on the database models."""
-        self._validate_db_model(name)
-        db_model_code: str = self.db_models.get(name, None)
+        db_model_code: str = self.config.db_models.get(self.table, None)
         if not db_model_code:
             raise Exception("something went wrong")
 
-        generator = PydanticModelGenerator(model=self.model, debug=self.debug) # init the generator
-        generated_pydantic_model: GeneratedPydanticModel = (await generator.generate(db_model_code))[0] # generate the model (coroutine must be in parentheses to index it)
-        imports, code = generated_pydantic_model.imports, generated_pydantic_model.code # extract the imports and code
-        total_code = f"{imports}\n{code}" # combine the imports and code for validation
+        generator = PydanticModelGenerator(
+            model=self.model, debug=self.debug
+        )  # init the generator
+        generated_pydantic_model: GeneratedPydanticModel = (
+            await generator.generate(db_model_code)
+        )[
+            0
+        ]  # generate the model (coroutine must be in parentheses to index it)
+        imports, code = (
+            generated_pydantic_model.imports,
+            generated_pydantic_model.code,
+        )  # extract the imports and code
+        total_code = f"{imports}\n{code}"  # combine the imports and code for validation
 
-        dynamic_output_validator = DynamicOutputValidator(total_code, debug=self.debug, retries=2) # init the dynamic output validator
-        is_valid, code = await dynamic_output_validator.validate() # dynamically the code
+        dynamic_output_validator = DynamicOutputValidator(
+            total_code, debug=self.debug, retries=2, model=self.model
+        )  # init the dynamic output validator
+        is_valid, code = (
+            await dynamic_output_validator.validate()
+        )  # dynamically the code
 
         if is_valid:
             self.pydantic_model = code
         else:
             raise Exception("Could not generate valid code")
 
-    async def generate_db_repo(self, name: str):
+    async def generate_db_repo(self):
         """Automatically generate a database repository based on the database model."""
-        self._validate_db_model(name)
-
-        generator = DatabaseRepositoryGenerator(debug=self.debug) # init the generator
-        generated_repo: GeneratedDatabaseRepository = (await generator.generate(name))[0]
+        generator = DatabaseRepositoryGenerator(
+            model=self.model, debug=self.debug
+        )  # init the generator
+        generated_repo: GeneratedDatabaseRepository = (
+            await generator.generate(self.table)
+        )[0]
         imports, code = generated_repo.imports, generated_repo.code
         total_code = f"{imports}\n{code}"
 
         self.db_repo = total_code
 
-    def generate_route_group(self, name: str):
+    async def generate_route_group(self):
         """Automatically generate a route group based on the pydantic model and the database repo."""
-        self._validate_db_model(name)
-
-        if not self.db_repo:
-            self.generate_db_repo(name)
-
-        # TODO do the generation
-        generated_route_group: RouteGroup = ""
+        generator = RouteGroupGenerator(model=self.model, debug=self.debug)
+        prompt = f"""
+        table: {self.table}
+        Pydanctic Model: {self.pydantic_model}
+        Database Repository: {self.db_repo}
+        """
+        generated_route_group: RouteGroup = (
+            await generator.generate(prompt)
+        )[0]
         self.route_group = generated_route_group
 
     def generate_tests(self, name: str):
         """Automatically generate tests based on the route group."""
-        self._validate_db_model(name)
-
-        if not self.route_group:
-            self.generate_route_group(name)
-
-        # TODO do the generation
-        generated_tests = ""
-        self.tests = generated_tests
+        pass
