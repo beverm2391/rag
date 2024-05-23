@@ -9,6 +9,7 @@ from autorest.models import (
     RouteGroup,
     RouteConfig,
     RegeneratedCode,
+    GeneratedTest,
     GeneratedPydanticModel,
     GeneratedDatabaseRepository,
 )
@@ -17,6 +18,7 @@ from autorest.generators import (
     PydanticModelGenerator,
     DatabaseRepositoryGenerator,
     RouteGroupGenerator,
+    TestGenerator,
 )
 from collections import namedtuple
 
@@ -188,7 +190,7 @@ class AutoRest:
     ):
         self.config: GenerativeConfig = self._init_config(config)
         self.table = table
-        self.pydantic_model: GeneratedPydanticModel = None
+        self.pydantic_model: str = None
         self.db_repo: GeneratedDatabaseRepository = None
         self.route_group: RouteGroup = None
         self.tests = None
@@ -246,10 +248,7 @@ class AutoRest:
         generated_repo: GeneratedDatabaseRepository = (
             await generator.generate(self.table)
         )[0]
-        imports, code = generated_repo.imports, generated_repo.code
-        total_code = f"{imports}\n{code}"
-
-        self.db_repo = total_code
+        self.db_repo = generated_repo
 
     async def generate_route_group(self):
         """Automatically generate a route group based on the pydantic model and the database repo."""
@@ -264,6 +263,52 @@ class AutoRest:
         )[0]
         self.route_group = generated_route_group
 
-    def generate_tests(self, name: str):
+    async def generate_tests(self, name: str, url: str, example_data, example_update, instructions: str = None):
         """Automatically generate tests based on the route group."""
-        pass
+        generator = TestGenerator(model=self.model, debug=self.debug)
+        prompt = f"""
+        table: {self.table}
+        Model Name: {name}
+        Route Group: {self.route_group}
+        URL: {url}
+        Example Data: {example_data}
+        Example Update: {example_update}
+        User Instructions: {instructions if instructions else ""}
+        """
+        generated_tests: GeneratedTest = (await generator.generate(prompt))[0]
+        self.tests = generated_tests
+
+    def dump_route_group(self):
+        routes = self.route_group.routes
+        text = ""
+        for route in routes:
+            text += f"@router.{route.method}('{route.route}')\n"
+            text += route.function
+            text += "\n\n"
+        
+        return text
+
+    def dump_to_files(self, output_dir: str) -> dict:
+        file_basename = self.table.lower()
+        file_paths = {
+            "pydantic_model": os.path.join(output_dir, f"{file_basename}_model.py"),
+            "db_repo": os.path.join(output_dir, f"{file_basename}_repo.py"),
+            "route_group": os.path.join(output_dir, f"{file_basename}_routes.py"),
+            "tests": os.path.join(output_dir, f"{file_basename}_tests.py"),
+        }
+
+        pydantic_model_full_code = self.pydantic_model
+        db_repo_full_code = self.db_repo.imports + "\n\n" + self.db_repo.code
+        route_group_full_code = self.dump_route_group()
+        tests_full_code = self.tests.imports + "\n\n" + self.tests.code
+
+        def save_to_file(file_path, content):
+            with open(file_path, "w") as file:
+                file.write(content)
+
+        save_to_file(file_paths["pydantic_model"], pydantic_model_full_code)
+        save_to_file(file_paths["db_repo"], db_repo_full_code)
+        save_to_file(file_paths["route_group"], route_group_full_code)
+        save_to_file(file_paths["tests"], tests_full_code)
+
+        return file_paths

@@ -98,6 +98,67 @@ route_group_example = """{'routes': [{'route': '',
    'method': 'DELETE',
    'function': 'async def delete_exposure(\n    pk: uuid.UUID,\n    db: AsyncSession = Depends(get_db_session),\n):\n    repo = ExposureDatabaseRepository(db)\n\n    try:\n        await repo.delete(pk)\n    except Exception as e:\n        logger.error(f"Error deleting exposure with id {pk}. Message: {e}")\n        raise HTTPException(\n            status_code=500, detail=f"Error deleting exposure with id {pk}. Message {e}"\n        )\n\n    return JSONResponse(status_code=204, content="Exposure deleted")'}]}"""
 
+test_example = """import pytest
+import uuid
+from httpx import AsyncClient
+from fastapi import status
+from functools import wraps
+
+from api_hub.api.models import InjurySchema
+from api_hub.testing import TestCrud
+
+
+@pytest.fixture
+def url() -> str:
+    return "/api/v1/injuries/"
+
+
+@pytest.fixture(scope="class")
+def example_data():
+    return {
+        "id": str(uuid.uuid4()),
+        "tekmir_harm_id": "301ec09d-ca25-47f4-abc9-4ecf05319c0c",
+        "contact_id": "6c03dad0-9bac-42d7-b426-4b5c3f71dc2c",
+        "discovery_of_injury_date": None,
+        "discovery_of_injury_date_precision": None,
+        "injury_date": None,
+        "injury_date_precision": None,
+        "substantiation_score": 90,
+        "substantiation_score_time": "2024-04-25T18:39:26.298397",
+    }
+
+@pytest.fixture(scope="class")
+def update_data():
+    return { 'substantiation_score' : 80 }
+
+
+@pytest.fixture(scope="class")
+def model():
+    return InjurySchema
+
+
+class TestInjuryAPI:
+    @pytest.mark.asyncio
+    async def test_read_injuries(
+        self, client: AsyncClient, url: str, model: InjurySchema
+    ):
+        response = await client.get(url)
+        data = response.json()
+
+        assert response.status_code == status.HTTP_200_OK
+        assert isinstance(data, list), "Expected a list of injuries"
+
+        for item in data:
+            model(**item)
+
+    @pytest.mark.asyncio
+    async def test_crud(self, client: AsyncClient, url: str, example_data: dict, update_data: dict):
+        await TestCrud.create(client, url, example_data)
+        await TestCrud.read(client, url, example_data)
+        await TestCrud.update(client, url, example_data, update_data)
+        await TestCrud.delete(client, url, example_data)
+"""
+
 BrokenCodeExamples = namedtuple("BrokenCodeExamples", ['example_1', 'example_2', 'example_3', 'example_4', 'example_5'])
 
 example_1 = """

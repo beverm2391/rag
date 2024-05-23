@@ -34,3 +34,8 @@ class GeneratedDatabaseRepository(BaseModel):
     table_name: str
     imports: str
     code: str
+
+class GeneratedTest(BaseModel):
+    table_name: str
+    imports: str
+    code: str
