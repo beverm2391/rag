@@ -30,6 +30,16 @@ MODELS = {
             "output": 30
         }
     },
+    "gpt-4o": {
+        "name": "gpt-4o",
+        "model_var": "gpt-4o",
+        "org": "openai",
+        "context_window": 128000,
+        "price_per_million_tokens": {
+            "input": 10,
+            "output": 30
+        }
+    },
     # ? DOCS: https://docs.anthropic.com/claude/docs/models-overview
     "claude-3-opus": {
         "name": "claude-3-opus",

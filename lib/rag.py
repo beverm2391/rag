@@ -40,6 +40,7 @@ class Rag:
 
         strings, scores = self.get(query, top_n)
         tokens_left = input_token_budget = self._chat.context_window - self._chat.max_tokens # calculate how many tokens we can use in the input
+        if self.debug: print(f"Input token budget: {input_token_budget}")
 
         contexts = ""
         for i, (string, score) in enumerate(zip(strings, scores)):
@@ -76,6 +77,7 @@ class Rag:
         """Chat with rag."""
         if self.debug: print("Calling `_chat.chat()` ...")
         prompt = self.make_prompt(query, top_n)
+        self._chat.messages = self._chat.messages[0] # reset messages list to default
         return self._chat.chat(prompt)
     
     def chat_stream(self, query: str, top_n: int = None) -> str:
